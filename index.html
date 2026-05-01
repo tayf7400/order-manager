@@ -276,6 +276,44 @@ textarea{resize:vertical;min-height:60px}
 
   /* hide desktop table on mobile receipt */
   #sec-receipt .card{display:none}
+
+  /* mobile card styles */
+  .mob-card{background:#fff;border-radius:12px;margin-bottom:10px;overflow:hidden;border:0.5px solid #e5e5e5}
+  .mob-card.rl{border-left:3px solid #E24B4A}
+  .mob-card.gl{border-left:3px solid #639922}
+  .mob-card.al{border-left:3px solid #EF9F27}
+  .mob-card.bl{border-left:3px solid #378ADD}
+  .mob-ch{display:flex;align-items:center;justify-content:space-between;padding:12px 13px 9px}
+  .mob-avi{width:36px;height:36px;border-radius:50%;background:#E6F1FB;color:#0C447C;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .mob-name{font-weight:700;font-size:14px;color:#1a1a1a}
+  .mob-sub{font-size:11px;color:#aaa;margin-top:1px}
+  .mob-bdg{font-size:10px;font-weight:700;padding:4px 10px;border-radius:99px}
+  .mob-bdg.r{background:#FCEBEB;color:#791F1F}
+  .mob-bdg.g{background:#EAF3DE;color:#27500A}
+  .mob-bdg.a{background:#FAEEDA;color:#633806}
+  .mob-bdg.b{background:#E6F1FB;color:#0C447C}
+  .mob-stats{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid #f5f5f5}
+  .mob-stat{padding:9px 10px;text-align:center}
+  .mob-stat:not(:last-child){border-right:1px solid #f5f5f5}
+  .mob-stl{font-size:9px;color:#aaa;text-transform:uppercase;letter-spacing:.04em}
+  .mob-stv{font-size:14px;font-weight:700;color:#1a1a1a;margin-top:2px}
+  .mob-stv.r{color:#A32D2D}.mob-stv.g{color:#27500A}.mob-stv.b{color:#0C447C}
+  .mob-btns{display:flex;gap:8px;padding:10px 13px;border-top:1px solid #f5f5f5}
+  .mob-btn{flex:1;padding:11px;font-size:13px;font-weight:700;border-radius:9px;border:none;cursor:pointer;text-align:center}
+  .mob-btn.pay{background:#EAF3DE;color:#27500A}
+  .mob-btn.view{background:#fff;color:#555;border:1px solid #e5e5e5}
+  .mob-btn.amend{background:#E6F1FB;color:#0C447C}
+  .mob-pills{display:flex;gap:5px;padding:0 13px 10px;flex-wrap:wrap}
+  .mob-pill{background:#f5f5f5;border-radius:6px;padding:3px 8px;font-size:11px;color:#444}
+  .mob-sec{font-size:10px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.05em;margin:14px 0 8px 2px}
+  .mob-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+  .mob-bar-name{font-size:11px;color:#555;width:80px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mob-bar-track{flex:1;height:8px;background:#f0f0f0;border-radius:99px;overflow:hidden}
+  .mob-bar-fill{height:100%;border-radius:99px}
+  .mob-bar-val{font-size:11px;font-weight:600;color:#1a1a1a;width:32px;text-align:right;flex-shrink:0}
+  .mob-ins-card{background:#fff;border-radius:12px;padding:13px;margin-bottom:10px;border:0.5px solid #e5e5e5}
+  .mob-risk-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f5f5f5}
+  .mob-risk-row:last-child{border-bottom:none}
 }
 @media print{
   .topbar,.tabs,.sbr,.sec-label,button,.back-btn,.mg,.cg,
@@ -1017,6 +1055,8 @@ function renderDash(){
 
   if(!html) html='<tr><td colspan="8"><div class="empty">No customers match.</div></td></tr>';
   document.getElementById('dash-tbody').innerHTML=html;
+  /* mobile card view */
+  if(typeof renderMobReceipt==='function') renderMobReceipt(list);
 
   /* ── Mobile card view — replaces the table on small screens ── */
   var isMobile=window.innerWidth<=768;
@@ -1338,6 +1378,7 @@ function renderInt(){
       actionArea+
     '</div>';
   }).join('');
+  if(typeof renderMobTracker==='function') setTimeout(renderMobTracker,0);
 }
 
 function togPaidGroup(key){
@@ -2870,9 +2911,11 @@ function renderDelivery(){
   if(window.innerWidth<=768 && dvView==='board') dvView='list';
   var rid=parseInt(document.getElementById('dv-run-sel').value);
   var content=document.getElementById('dv-content');
-  content.style.display=dvView==='list'?'block':'none';
+  content.style.display=dvView==='list'&&!isMob()?'block':'none';
   document.getElementById('dv-board-content').style.display=dvView==='board'?'block':'none';
   if(dvView==='board'){renderDeliveryBoard();return;}
+  /* mobile delivery */
+  if(isMob()){if(typeof renderMobDelivery==='function')renderMobDelivery();return;}
   if(!rid){content.innerHTML='<div class="empty" style="padding:40px">Select or create a delivery run above.</div>';return;}
   var run=D.runs.find(function(r){return r.id===rid;});
   if(!run){content.innerHTML='<div class="empty">Run not found.</div>';return;}
@@ -3811,21 +3854,349 @@ function copyPlannerText(){
   navigator.clipboard.writeText(text).then(function(){toast('Copied ✓');}).catch(function(){var ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('Copied ✓');});
 }
 
-/* ── Resize: re-render active tab for mobile/desktop switch ── */
+/* ════════════════════════════════════════
+   MOBILE RENDER FUNCTIONS
+   ════════════════════════════════════════ */
+var isMob=function(){return window.innerWidth<=768;};
+
+/* ── Mobile Receipt ── */
+function renderMobReceipt(list){
+  var wrap=document.getElementById('mob-receipt');
+  if(!wrap){
+    wrap=document.createElement('div');
+    wrap.id='mob-receipt';
+    document.getElementById('dash-view').appendChild(wrap);
+  }
+  if(!isMob()){wrap.style.display='none';return;}
+  wrap.style.display='block';
+  var html='';
+  list.forEach(function(row){
+    var c=row.c,due=row.due,tot=row.tot;
+    var cl=row.status==='unpaid'?'rl':row.status==='partial'?'al':'gl';
+    var bc=row.status==='unpaid'?'r':row.status==='partial'?'a':'g';
+    var blbl=row.status==='unpaid'?'Owes '+rm(due):row.status==='partial'?'Partial':'Paid';
+    var aviStyle=row.status==='paid'?'background:#EAF3DE;color:#27500A':row.status==='partial'?'background:#FAEEDA;color:#633806':'background:#E6F1FB;color:#0C447C';
+    html+=
+      '<div class="mob-card '+cl+'">'+
+        '<div class="mob-ch">'+
+          '<div style="display:flex;align-items:center;gap:10px">'+
+            '<div class="mob-avi" style="'+aviStyle+'">'+ini(c.name)+'</div>'+
+            '<div><div class="mob-name">'+esc(c.name)+'</div><div class="mob-sub">'+(c.phone||row.ords.length+' orders')+'</div></div>'+
+          '</div>'+
+          '<span class="mob-bdg '+bc+'">'+blbl+'</span>'+
+        '</div>'+
+        '<div class="mob-stats">'+
+          '<div class="mob-stat"><div class="mob-stl">Orders</div><div class="mob-stv">'+row.ords.length+'</div></div>'+
+          '<div class="mob-stat"><div class="mob-stl">Total</div><div class="mob-stv">'+rm(tot)+'</div></div>'+
+          '<div class="mob-stat"><div class="mob-stl">Owes</div><div class="mob-stv '+(due>0?'r':'')+'">'+( due>0?rm(due):'—')+'</div></div>'+
+        '</div>'+
+        '<div class="mob-btns">'+
+          (due>0?'<div class="mob-btn pay" onclick="markCustPaid('+c.id+')">✓ Mark paid</div>':'') +
+          '<div class="mob-btn view" onclick="openDet('+c.id+')">'+(due>0?'Receipt':'View orders')+'</div>'+
+        '</div>'+
+      '</div>';
+  });
+  if(!html) html='<div style="text-align:center;padding:30px;color:#aaa;font-size:13px">No customers match.</div>';
+  wrap.innerHTML=html;
+}
+
+/* ── Mobile Tracker ── */
+function renderMobTracker(){
+  var wrap=document.getElementById('mob-tracker');
+  if(!wrap) return;
+  if(!isMob()){wrap.style.display='none';return;}
+  wrap.style.display='block';
+
+  var today=new Date();
+  var thisMonth=today.toISOString().substring(0,7);
+  var monthOrds=D.orders.filter(function(o){return o.date.substring(0,7)===thisMonth;});
+  var monthProfit=monthOrds.reduce(function(s,o){return s+oSell(o)-oCost(o);},0);
+  var monthRev=monthOrds.reduce(function(s,o){return s+oSell(o);},0);
+  var monthMargin=monthRev>0?(monthProfit/monthRev*100):0;
+  var pending=D.orders.filter(function(o){return o.status==='unpaid';});
+  var pendingProfit=pending.reduce(function(s,o){return s+oSell(o)-oCost(o);},0);
+
+  /* group orders by cid+date same as desktop */
+  var groups={};var groupOrder=[];
+  var q=(document.getElementById('int-s')||{value:''}).value.toLowerCase();
+  var mf=(document.getElementById('int-month')||{value:''}).value;
+  var sf=(document.getElementById('int-f')||{value:''}).value;
+
+  D.orders.slice().sort(function(a,b){return b.date.localeCompare(a.date);}).filter(function(o){
+    var c=cp(o.cid);var nm=c?c.name.toLowerCase():'';
+    var im=o.items.some(function(i){var p=sp(i.s);return p&&p.name.toLowerCase().indexOf(q)>=0;});
+    var mm=!mf||o.date.substring(0,7)===mf;
+    return(!q||nm.indexOf(q)>=0||im)&&(!sf||o.status===sf)&&mm;
+  }).forEach(function(o){
+    var key=o.cid+'|'+o.date;
+    if(!groups[key]){groups[key]={cid:o.cid,date:o.date,orders:[]};groupOrder.push(key);}
+    groups[key].orders.push(o);
+  });
+
+  var html=
+    '<div class="kpi2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">'+
+      '<div class="mc"><div class="ml">This month profit</div><div class="mv gn">'+rm(monthProfit)+'</div></div>'+
+      '<div class="mc"><div class="ml">This month margin</div><div class="mv bl">'+monthMargin.toFixed(1)+'%</div></div>'+
+      '<div class="mc"><div class="ml">Unpaid orders</div><div class="mv wn">'+pending.length+'</div></div>'+
+      '<div class="mc"><div class="ml">Unpaid profit</div><div class="mv gn">'+rm(pendingProfit)+'</div></div>'+
+    '</div>';
+
+  if(!groupOrder.length){
+    html+='<div style="text-align:center;padding:30px;color:#aaa;font-size:13px">No orders found.</div>';
+    wrap.innerHTML=html;return;
+  }
+
+  groupOrder.forEach(function(key){
+    var g=groups[key];var c=cp(g.cid);
+    var allOrds=g.orders;
+    var totalCost=allOrds.reduce(function(s,o){return s+oCost(o);},0);
+    var totalSell=allOrds.reduce(function(s,o){return s+oSell(o);},0);
+    var totalProfit=totalSell-totalCost;
+    var hasUnpaid=allOrds.some(function(o){return o.status==='unpaid';});
+    var hasPartial=allOrds.some(function(o){return o.status==='partial';});
+    var status=hasUnpaid?'unpaid':hasPartial?'partial':'paid';
+    var cl=status==='unpaid'?'rl':status==='partial'?'al':'gl';
+    var bc=status==='unpaid'?'r':status==='partial'?'a':'g';
+    var blbl=status==='unpaid'?'Unpaid':status==='partial'?'Partial':'Paid';
+    var aviStyle=status==='paid'?'background:#EAF3DE;color:#27500A':status==='partial'?'background:#FAEEDA;color:#633806':'background:#E6F1FB;color:#0C447C';
+
+    /* merge items */
+    var itemMap={};
+    allOrds.forEach(function(o){o.items.forEach(function(i){var p=sp(i.s);if(!p)return;if(itemMap[i.s])itemMap[i.s].q=parseFloat((itemMap[i.s].q+i.q).toFixed(2));else itemMap[i.s]={name:p.name,q:i.q};});});
+    var pills=Object.values(itemMap).map(function(it){return'<span class="mob-pill">'+esc(it.name)+' x'+it.q+'</span>';}).join('');
+
+    var multiOrder=allOrds.length>1;
+    html+=
+      '<div class="mob-card '+cl+'">'+
+        '<div class="mob-ch">'+
+          '<div style="display:flex;align-items:center;gap:10px">'+
+            '<div class="mob-avi" style="'+aviStyle+'">'+ini(c?c.name:'?')+'</div>'+
+            '<div><div class="mob-name">'+(c?esc(c.name):'?')+'</div><div class="mob-sub">'+g.date+(multiOrder?' · '+allOrds.length+' orders':'')+'</div></div>'+
+          '</div>'+
+          '<span class="mob-bdg '+bc+'">'+blbl+'</span>'+
+        '</div>'+
+        '<div class="mob-pills">'+pills+'</div>'+
+        '<div class="mob-stats">'+
+          '<div class="mob-stat"><div class="mob-stl">Cost</div><div class="mob-stv">'+rm(totalCost)+'</div></div>'+
+          '<div class="mob-stat"><div class="mob-stl">Sell</div><div class="mob-stv">'+rm(totalSell)+'</div></div>'+
+          '<div class="mob-stat"><div class="mob-stl">Profit</div><div class="mob-stv g">+'+rm(totalProfit)+'</div></div>'+
+        '</div>'+
+        '<div class="mob-btns">'+
+          (status!=='paid'?'<div class="mob-btn pay" onclick="'+(multiOrder?'togPaidGroup(\''+key+'\')':'togPaid('+allOrds[0].id+')')+'">✓ Mark paid</div>':'')+
+          '<div class="mob-btn amend" onclick="openAmend('+allOrds[0].id+')">Amend</div>'+
+          (status==='paid'?'<div class="mob-btn view" onclick="togPaid('+allOrds[0].id+')">Unpay</div>':'')+
+        '</div>'+
+      '</div>';
+  });
+  wrap.innerHTML=html;
+}
+
+/* ── Mobile Delivery ── */
+function renderMobDelivery(){
+  var wrap=document.getElementById('mob-delivery');
+  if(!wrap) return;
+  if(!isMob()){wrap.style.display='none';return;}
+  wrap.style.display='block';
+
+  var rid=parseInt((document.getElementById('dv-run-sel')||{value:0}).value);
+  if(!rid){wrap.innerHTML='<div style="text-align:center;padding:30px;color:#aaa;font-size:13px">Select or create a delivery run above.</div>';return;}
+  var run=D.runs.find(function(r){return r.id===rid;});
+  if(!run){wrap.innerHTML='<div style="text-align:center;padding:30px;color:#aaa">Run not found.</div>';return;}
+
+  var confirmed=run.entries.filter(function(e){return e.dispStatus==='confirm';});
+  var delayed=run.entries.filter(function(e){return e.dispStatus==='delay';});
+  var skipped=run.entries.filter(function(e){return e.dispStatus==='skip';});
+
+  /* load map */
+  var loadMap={};
+  confirmed.forEach(function(e){
+    D.orders.filter(function(o){return o.cid===e.cid&&o.date===run.date;}).forEach(function(o){
+      o.items.forEach(function(it){
+        var p=sp(it.s);if(!p)return;
+        if(!loadMap[p.name])loadMap[p.name]=0;
+        loadMap[p.name]=parseFloat((loadMap[p.name]+it.q).toFixed(2));
+      });
+    });
+  });
+  var loadItems=Object.entries(loadMap).sort(function(a,b){return b[1]-a[1];});
+  var maxQty=loadItems.length?loadItems[0][1]:1;
+
+  var html=
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">'+
+      '<div class="mc"><div class="ml">Confirmed</div><div class="mv gn">'+confirmed.length+'</div></div>'+
+      '<div class="mc"><div class="ml">Delayed</div><div class="mv wn">'+delayed.length+'</div></div>'+
+      '<div class="mc"><div class="ml">Skipped</div><div class="mv" style="color:#888">'+skipped.length+'</div></div>'+
+      '<div class="mc"><div class="ml">Total</div><div class="mv">'+run.entries.length+'</div></div>'+
+    '</div>';
+
+  if(loadItems.length){
+    html+='<div class="mob-ins-card"><div style="font-size:11px;font-weight:600;color:#1e3a5f;margin-bottom:10px">Load sheet — what to pack</div>';
+    loadItems.slice(0,8).forEach(function(entry){
+      var pct=Math.round(entry[1]/maxQty*100);
+      var col=pct>70?'#378ADD':pct>40?'#639922':'#EF9F27';
+      html+='<div class="mob-bar-row">'+
+        '<span class="mob-bar-name">'+esc(entry[0])+'</span>'+
+        '<div class="mob-bar-track"><div class="mob-bar-fill" style="width:'+pct+'%;background:'+col+'"></div></div>'+
+        '<span class="mob-bar-val">'+entry[1]+'x</span>'+
+      '</div>';
+    });
+    html+='</div>';
+  }
+
+  html+='<div class="mob-sec">Delivery list</div>';
+  run.entries.forEach(function(e){
+    var c=cp(e.cid);
+    var orders=D.orders.filter(function(o){return o.cid===e.cid&&o.date===run.date;});
+    var items=[];
+    orders.forEach(function(o){o.items.forEach(function(i){var p=sp(i.s);if(p)items.push(esc(p.name)+' x'+i.q);});});
+    var st=e.dispStatus||'pending';
+    var stStyle=st==='confirm'?'background:#EAF3DE;color:#27500A':st==='delay'?'background:#FAEEDA;color:#633806':'background:#E6F1FB;color:#0C447C';
+    var stLabel=st==='confirm'?'Confirmed':st==='delay'?'Delayed':st==='skip'?'Skipped':'Pending';
+    html+=
+      '<div class="mob-card">'+
+        '<div class="mob-ch">'+
+          '<div style="display:flex;align-items:center;gap:10px">'+
+            '<div class="mob-avi">'+ini(c?c.name:'?')+'</div>'+
+            '<div><div class="mob-name">'+(c?esc(c.name):'?')+'</div>'+
+            (c&&c.phone?'<div class="mob-sub">'+esc(c.phone)+'</div>':'')+
+            '</div>'+
+          '</div>'+
+          '<span class="mob-bdg" style="'+stStyle+'">'+stLabel+'</span>'+
+        '</div>'+
+        (items.length?'<div class="mob-pills">'+items.map(function(i){return'<span class="mob-pill">'+i+'</span>';}).join('')+'</div>':'')+
+        '<div class="mob-btns">'+
+          '<div class="mob-btn pay" onclick="setDvStatus('+e.cid+',\''+run.date+'\',\'confirm\')">✓ Confirm</div>'+
+          '<div class="mob-btn view" onclick="setDvStatus('+e.cid+',\''+run.date+'\',\'delay\')">Delay</div>'+
+          '<div class="mob-btn view" onclick="setDvStatus('+e.cid+',\''+run.date+'\',\'skip\')" style="color:#999">Skip</div>'+
+        '</div>'+
+      '</div>';
+  });
+  wrap.innerHTML=html;
+}
+
+/* helper to update delivery status from mobile */
+function setDvStatus(cid,date,status){
+  var run=D.runs.find(function(r){return r.date===date;});
+  if(!run)return;
+  var entry=run.entries.find(function(e){return e.cid===cid;});
+  if(!entry)return;
+  entry.dispStatus=status;
+  saveData();
+  renderMobDelivery();
+  toast(status==='confirm'?'Confirmed ✓':status==='delay'?'Marked delayed':'Skipped');
+}
+
+/* ── Mobile Insights ── */
+function renderMobInsights(){
+  var wrap=document.getElementById('mob-insights');
+  if(!wrap) return;
+  if(!isMob()){wrap.style.display='none';return;}
+  wrap.style.display='block';
+
+  var today=new Date();
+  var custStats={};
+  D.orders.forEach(function(o){if(!custStats[o.cid])custStats[o.cid]={orders:[],spend:0,dates:[]};custStats[o.cid].orders.push(o);custStats[o.cid].spend+=oSell(o);custStats[o.cid].dates.push(o.date);});
+  var veryActive=0,atRisk=0,atRiskList=[];
+  Object.keys(custStats).forEach(function(cid){var s=custStats[cid];var last=new Date(s.dates.slice().sort().pop());var days=Math.round((today-last)/86400000);if(days<=30)veryActive++;else{atRisk++;var c=cp(parseInt(cid));atRiskList.push({name:c?c.name:'?',orders:s.orders.length,spend:s.spend,days:days});}});
+
+  var prodStats={};
+  D.orders.forEach(function(o){o.items.forEach(function(i){var p=sp(i.s);if(!p)return;if(!prodStats[i.s])prodStats[i.s]={name:p.name,profit:0,rev:0};prodStats[i.s].profit+=(i.sp-i.cp)*i.q;prodStats[i.s].rev+=i.sp*i.q;});});
+  var topProds=Object.values(prodStats).sort(function(a,b){return b.profit-a.profit}).slice(0,6);
+  var maxProfit=topProds.length?topProds[0].profit:1;
+
+  var totalRev=D.orders.reduce(function(s,o){return s+oSell(o);},0);
+  var totalProfit=D.orders.reduce(function(s,o){return s+oSell(o)-oCost(o);},0);
+  var outstanding=D.orders.filter(function(o){return o.status==='unpaid';}).reduce(function(s,o){return s+oSell(o);},0);
+  var margin=totalRev>0?totalProfit/totalRev*100:0;
+
+  var html=
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">'+
+      '<div class="mc"><div class="ml">Overall margin</div><div class="mv bl">'+margin.toFixed(1)+'%</div></div>'+
+      '<div class="mc"><div class="ml">Total profit</div><div class="mv gn">'+rm(totalProfit)+'</div></div>'+
+      '<div class="mc"><div class="ml">Active buyers</div><div class="mv">'+veryActive+'</div></div>'+
+      '<div class="mc"><div class="ml">At risk</div><div class="mv wn">'+atRisk+'</div></div>'+
+    '</div>'+
+
+    '<div class="mob-ins-card">'+
+      '<div style="font-size:11px;font-weight:600;color:#1e3a5f;margin-bottom:10px">Top products by profit</div>';
+  topProds.forEach(function(p,i){
+    var pct=Math.round(p.profit/maxProfit*100);
+    var col=i<2?'#378ADD':i<4?'#639922':'#EF9F27';
+    html+='<div class="mob-bar-row">'+
+      '<span class="mob-bar-name">'+esc(p.name.length>10?p.name.substring(0,10)+'…':p.name)+'</span>'+
+      '<div class="mob-bar-track"><div class="mob-bar-fill" style="width:'+pct+'%;background:'+col+'"></div></div>'+
+      '<span class="mob-bar-val">'+rm(Math.round(p.profit))+'</span>'+
+    '</div>';
+  });
+  html+='</div>';
+
+  if(atRiskList.length){
+    html+='<div class="mob-ins-card"><div style="font-size:11px;font-weight:600;color:#dc2626;margin-bottom:10px">⚠️ At-risk customers</div>';
+    atRiskList.sort(function(a,b){return b.spend-a.spend;}).slice(0,5).forEach(function(r){
+      html+='<div class="mob-risk-row">'+
+        '<div><div style="font-size:13px;font-weight:600;color:#1a1a1a">'+esc(r.name)+'</div>'+
+        '<div style="font-size:11px;color:#aaa">'+r.orders+' orders · '+rm(Math.round(r.spend))+'</div></div>'+
+        '<span style="font-size:12px;color:#dc2626;font-weight:700">'+r.days+' days</span>'+
+      '</div>';
+    });
+    html+='</div>';
+  }
+
+  html+=
+    '<div style="background:#fff;border-radius:12px;border:2px solid #e0e7ff;padding:14px;margin-bottom:10px">'+
+      '<div style="font-size:14px;font-weight:700;color:#1e3a5f;margin-bottom:3px">🎯 Next Run Planner</div>'+
+      '<div style="font-size:11px;color:#aaa;margin-bottom:12px">AI suggestions based on your data</div>'+
+      '<button onclick="show(\'insights\')" style="width:100%;padding:12px;background:#1e3a5f;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer">✨ Generate plan</button>'+
+    '</div>';
+
+  wrap.innerHTML=html;
+}
+
+/* ── patch show() to trigger mobile renders ── */
+var _origShow=show;
+show=function(tab){
+  _origShow(tab);
+  if(tab==='receipt') setTimeout(renderMobInsights,0);
+  if(tab==='internal') setTimeout(renderMobTracker,0);
+  if(tab==='delivery') setTimeout(renderMobDelivery,0);
+  if(tab==='insights') setTimeout(renderMobInsights,0);
+};
+
+/* ── inject mobile containers after sections load ── */
+function injectMobContainers(){
+  /* receipt */
+  var dr=document.getElementById('dash-view');
+  if(dr&&!document.getElementById('mob-receipt')){var d=document.createElement('div');d.id='mob-receipt';d.style.display='none';dr.appendChild(d);}
+  /* tracker */
+  var ib=document.getElementById('int-body');
+  if(ib&&!document.getElementById('mob-tracker')){var t=document.createElement('div');t.id='mob-tracker';t.style.display='none';ib.parentNode.insertBefore(t,ib.nextSibling);}
+  /* delivery */
+  var dc=document.getElementById('dv-content');
+  if(dc&&!document.getElementById('mob-delivery')){var dv=document.createElement('div');dv.id='mob-delivery';dv.style.display='none';dc.parentNode.insertBefore(dv,dc.nextSibling);}
+  /* insights */
+  var iw=document.getElementById('insights-wrap');
+  if(iw&&!document.getElementById('mob-insights')){var ins=document.createElement('div');ins.id='mob-insights';ins.style.display='none';iw.parentNode.insertBefore(ins,iw.nextSibling);}
+}
+
+
 var resizeTimer;
 window.addEventListener('resize',function(){
   clearTimeout(resizeTimer);
   resizeTimer=setTimeout(function(){
     var active=document.querySelector('.tab.active');
     if(!active) return;
-    var tab=['receipt','internal','stock','customers','reports','summary','delivery','insights'][Array.from(document.querySelectorAll('.tab')).indexOf(active)];
-    if(tab==='receipt') renderDash();
-    if(tab==='delivery') renderDelivery();
+    var tabs=['receipt','internal','stock','customers','reports','summary','delivery','insights'];
+    var tab=tabs[Array.from(document.querySelectorAll('.tab')).indexOf(active)];
+    if(tab==='receipt'){renderDash();renderMobInsights();}
+    if(tab==='internal') renderMobTracker();
+    if(tab==='delivery'){renderDelivery();renderMobDelivery();}
+    if(tab==='insights') renderMobInsights();
   },200);
 });
 
 /* boot */
 lkInit();
+setTimeout(injectMobContainers,100);
 
 </script>
 </body>
