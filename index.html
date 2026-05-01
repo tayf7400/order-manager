@@ -223,7 +223,7 @@ textarea{resize:vertical;min-height:60px}
   .topbar{padding:10px 14px;flex-wrap:nowrap;position:sticky;top:0;z-index:100;gap:8px}
   .topbar-title{font-size:14px}
   .topbar-sub{display:none}
-  #topbar-actions{display:none;flex-direction:column;gap:8px;position:fixed;top:52px;right:0;left:0;background:#fff;border-bottom:1px solid #e5e5e5;padding:12px 14px;z-index:200;box-shadow:0 4px 12px rgba(0,0,0,.1)}
+  #topbar-actions{display:none;flex-direction:row!important;flex-wrap:wrap;gap:6px;position:fixed;top:52px;right:0;left:0;background:#fff;border-bottom:1px solid #e5e5e5;padding:10px 14px;z-index:200;box-shadow:0 4px 12px rgba(0,0,0,.1);align-items:center}
   #topbar-actions.open{display:flex!important}
   #topbar-menu-btn{display:flex!important;align-items:center;justify-content:center}
 
@@ -377,8 +377,8 @@ textarea{resize:vertical;min-height:60px}
   <div id="topbar-actions" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <span style="font-size:12px;color:#888" id="save-status"><span class="save-dot"></span>Data saved locally</span>
 
-    <!-- ── Google Drive section ── -->
-    <div style="display:flex;align-items:center;gap:6px;padding:0 8px;border-left:1px solid #e5e5e5;border-right:1px solid #e5e5e5">
+    <!-- Google Drive section -->
+    <div id="gd-section" style="display:flex;align-items:center;gap:6px;padding:0 8px;border-left:1px solid #e5e5e5;border-right:1px solid #e5e5e5">
       <svg width="14" height="14" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 27h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg>
       <span class="gd-status"><span class="gd-dot" id="gd-dot"></span><span id="gd-status-txt">Not connected</span></span>
       <button class="gd-btn" id="gd-connect-btn" onclick="gdConnect()" title="Connect Google Drive">Connect</button>
@@ -387,12 +387,12 @@ textarea{resize:vertical;min-height:60px}
       <button class="gd-btn" id="gd-disconnect-btn" onclick="gdDisconnect()" title="Disconnect" style="display:none;color:#888;font-size:10px">&#10005;</button>
     </div>
 
-    <button class="btn btn-o btn-sm" onclick="exportJSON()" style="font-size:11px">&#8595; Export data</button>
+    <button class="btn btn-o btn-sm" onclick="exportJSON()" style="font-size:11px">&#8595; Export</button>
     <label class="btn btn-o btn-sm" style="font-size:11px;cursor:pointer;margin:0">
-      &#8593; Import data
+      &#8593; Import
       <input type="file" accept=".json" onchange="importJSON(event)" style="display:none">
     </label>
-    <button class="btn btn-d btn-sm" onclick="clearAllData()" style="font-size:11px">Reset all data</button>
+    <button class="btn btn-d btn-sm" onclick="clearAllData()" style="font-size:11px">Reset</button>
     <button class="btn btn-o btn-sm" onclick="lkChangePw()" style="font-size:11px" title="Change password">🔑</button>
     <button class="btn btn-o btn-sm" onclick="lkLock()" style="font-size:11px">🔒 Lock</button>
   </div>
@@ -3857,7 +3857,7 @@ function copyPlannerText(){
 /* ════════════════════════════════════════
    MOBILE RENDER FUNCTIONS
    ════════════════════════════════════════ */
-var isMob=function(){return window.innerWidth<=768;};
+function isMob(){return window.innerWidth<=768;}
 
 /* ── Mobile Receipt ── */
 function renderMobReceipt(list){
@@ -4196,7 +4196,14 @@ window.addEventListener('resize',function(){
 
 /* boot */
 lkInit();
-setTimeout(injectMobContainers,100);
+/* inject mobile containers immediately, then re-render active tab */
+setTimeout(function(){
+  injectMobContainers();
+  if(isMob()){
+    renderDash();
+    renderMobInsights();
+  }
+},150);
 
 </script>
 </body>
