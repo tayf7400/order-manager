@@ -218,10 +218,49 @@ textarea{resize:vertical;min-height:60px}
   body{background:#fff}
   .shell{padding:0;max-width:100%}
   #sum-table-wrap{overflow:visible}
+  #lock-screen,#lock-idle-bar{display:none!important}
 }
+#lock-screen{position:fixed;inset:0;background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px}
+.lock-box{background:#fff;border-radius:18px;padding:36px 32px;max-width:360px;width:100%;box-shadow:0 24px 80px rgba(0,0,0,.35);text-align:center}
+.lock-icon{font-size:40px;margin-bottom:14px}
+.lock-title{font-size:20px;font-weight:700;color:#1a1a1a;margin-bottom:6px}
+.lock-sub{font-size:13px;color:#888;margin-bottom:24px;line-height:1.5}
+.lock-input{width:100%;font-size:16px;padding:12px 14px;border:2px solid #e0e0e0;border-radius:10px;outline:none;text-align:center;letter-spacing:.1em;font-family:inherit;margin-bottom:8px;transition:border-color .2s}
+.lock-input:focus{border-color:#1d4ed8}
+.lock-input.shake{animation:lkshake .35s}
+.lock-btn{width:100%;padding:12px;background:#1e3a5f;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-top:6px;transition:opacity .15s}
+.lock-btn:hover{opacity:.88}
+.lock-err{font-size:12px;color:#dc2626;min-height:18px;margin-bottom:2px}
+.lock-hint{font-size:11px;color:#bbb;margin-top:12px}
+.lock-hint a{color:#bbb;text-decoration:underline;cursor:pointer}
+#lock-idle-bar{position:fixed;top:0;left:0;height:3px;background:#1d4ed8;z-index:10000;pointer-events:none}
+@keyframes lkshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
+.chpw-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;display:flex;align-items:center;justify-content:center;padding:16px}
+.chpw-box{background:#fff;border-radius:14px;padding:28px;max-width:340px;width:100%}
+.chpw-box h2{font-size:15px;font-weight:700;margin-bottom:14px}
+.chpw-box label{font-size:12px;color:#555;font-weight:500;display:block;margin:10px 0 4px}
+.chpw-box input{width:100%;font-size:13px;padding:8px 10px;border:1px solid #e0e0e0;border-radius:7px;outline:none;font-family:inherit}
+.chpw-err{font-size:12px;color:#dc2626;min-height:16px;margin-top:6px}
+.chpw-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 </style>
 </head>
 <body>
+
+<div id="lock-idle-bar" style="width:100%"></div>
+<div id="lock-screen">
+  <div class="lock-box">
+    <div class="lock-icon" id="lk-icon">🔒</div>
+    <div class="lock-title" id="lk-title">Order Manager</div>
+    <div class="lock-sub" id="lk-sub">Enter your password to continue</div>
+    <input class="lock-input" type="password" id="lk-input" placeholder="••••••••" maxlength="64"
+      onkeydown="if(event.key==='Enter')lkSubmit()"
+      oninput="this.classList.remove('shake');document.getElementById('lk-err').textContent=''">
+    <div class="lock-err" id="lk-err"></div>
+    <button class="lock-btn" id="lk-btn" onclick="lkSubmit()">Unlock</button>
+    <div class="lock-hint" id="lk-hint"></div>
+  </div>
+</div>
+<div id="app-wrap" style="display:none">
 <div class="topbar">
   <div>
     <div class="topbar-title">Order Manager</div>
@@ -246,6 +285,8 @@ textarea{resize:vertical;min-height:60px}
       <input type="file" accept=".json" onchange="importJSON(event)" style="display:none">
     </label>
     <button class="btn btn-d btn-sm" onclick="clearAllData()" style="font-size:11px">Reset all data</button>
+    <button class="btn btn-o btn-sm" onclick="lkChangePw()" style="font-size:11px" title="Change password">🔑</button>
+    <button class="btn btn-o btn-sm" onclick="lkLock()" style="font-size:11px">🔒 Lock</button>
   </div>
 </div>
 <div class="shell">
@@ -595,6 +636,7 @@ textarea{resize:vertical;min-height:60px}
 
 </div>
 </div>
+</div><!-- /app-wrap -->
 <div class="toast" id="toast"></div>
 
 <script>
@@ -658,15 +700,32 @@ function saveData(){
 }
 
 function clearAllData(){
-  if(!confirm('This will delete ALL customers, orders and stock. Are you sure?'))return;
+  if(document.getElementById('reset-overlay')) return;
+  var ov=document.createElement('div');
+  ov.id='reset-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML=
+    '<div style="background:#fff;border-radius:16px;padding:32px 28px;max-width:380px;width:100%;box-shadow:0 24px 80px rgba(0,0,0,.25);text-align:center">'+
+      '<div style="font-size:38px;margin-bottom:12px">⚠️</div>'+
+      '<div style="font-size:17px;font-weight:700;color:#1a1a1a;margin-bottom:8px">Reset all data?</div>'+
+      '<div style="font-size:13px;color:#666;line-height:1.6;margin-bottom:20px">This will permanently delete <strong>all customers, orders and stock</strong>.<br><br>Type <strong>RESET</strong> below to confirm.</div>'+
+      '<input id="reset-confirm-input" type="text" placeholder="Type RESET here" autocomplete="off" '+
+        'style="width:100%;font-size:14px;padding:10px 12px;border:2px solid #e0e0e0;border-radius:8px;outline:none;text-align:center;font-family:inherit;margin-bottom:14px" '+
+        'oninput="document.getElementById(\'reset-do-btn\').disabled=this.value!==\'RESET\';document.getElementById(\'reset-do-btn\').style.opacity=this.value===\'RESET\'?\'1\':\'0.4\'" '+
+        'onkeydown="if(event.key===\'Enter\'&&this.value===\'RESET\')doResetAllData()">'+
+      '<div style="display:flex;gap:10px">'+
+        '<button class="btn btn-o" style="flex:1;padding:10px" onclick="document.getElementById(\'reset-overlay\').remove()">Cancel</button>'+
+        '<button id="reset-do-btn" class="btn btn-d" style="flex:1;padding:10px;opacity:.4" disabled onclick="doResetAllData()">Yes, delete everything</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(ov);
+  setTimeout(function(){document.getElementById('reset-confirm-input').focus();},80);
+}
+function doResetAllData(){
+  var ov=document.getElementById('reset-overlay');if(ov)ov.remove();
   Object.values(KEYS).forEach(function(k){localStorage.removeItem(k)});
-  D.customers=[];
-  D.stock=[];
-  D.orders=[];
-  D.nid=1;
-  saveData();
-  selCust=null;
-  show('receipt');
+  D.customers=[];D.stock=[];D.orders=[];D.nid=1;
+  saveData();selCust=null;show('receipt');
   toast('All data cleared. Fresh start!');
 }
 
@@ -2967,403 +3026,6 @@ function importJSON(e){
   reader.readAsText(file);
 }
 
-/* ════════════════════════════════════════════════════
-   INSIGHTS TAB
-   ════════════════════════════════════════════════════ */
-var insightsCharts=[];
-
-function renderInsights(){
-  var wrap=document.getElementById('insights-wrap');
-  /* destroy old charts */
-  insightsCharts.forEach(function(c){try{c.destroy();}catch(e){}});
-  insightsCharts=[];
-
-  if(!D.orders.length){
-    wrap.innerHTML='<div class="empty" style="padding:40px;text-align:center;color:#aaa">No data yet. Add some orders to see insights.</div>';
-    return;
-  }
-
-  /* ── compute everything ── */
-  var today=new Date('2026-05-01');
-
-  /* monthly stats */
-  var monthly={};
-  D.orders.forEach(function(o){
-    var m=o.date.substring(0,7);
-    if(!monthly[m]) monthly[m]={rev:0,cost:0,orders:0,buyers:{}};
-    var rev=oSell(o), cost=oCost(o);
-    monthly[m].rev+=rev; monthly[m].cost+=cost; monthly[m].orders++;
-    monthly[m].buyers[o.cid]=1;
-  });
-  var months=Object.keys(monthly).sort();
-
-  /* customer stats */
-  var custStats={};
-  D.orders.forEach(function(o){
-    if(!custStats[o.cid]) custStats[o.cid]={orders:[],spend:0,dates:[]};
-    custStats[o.cid].orders.push(o);
-    custStats[o.cid].spend+=oSell(o);
-    custStats[o.cid].dates.push(o.date);
-  });
-
-  /* per-customer status */
-  var veryActive=0,atRisk=0,totalBuyers=Object.keys(custStats).length;
-  var atRiskList=[];
-  Object.keys(custStats).forEach(function(cid){
-    var s=custStats[cid];
-    var last=new Date(s.dates.slice().sort().pop());
-    var daysSince=Math.round((today-last)/86400000);
-    if(daysSince<=30) veryActive++;
-    else { atRisk++; var c=cp(parseInt(cid)); atRiskList.push({name:c?c.name:'?',orders:s.orders.length,spend:s.spend,last:s.dates.slice().sort().pop(),days:daysSince}); }
-  });
-  var lurkers=60-totalBuyers; /* assume 60 WA members */
-
-  /* product stats */
-  var prodStats={};
-  D.orders.forEach(function(o){
-    o.items.forEach(function(i){
-      var p=sp(i.s); if(!p) return;
-      if(!prodStats[i.s]) prodStats[i.s]={name:p.name,profit:0,rev:0,qty:0};
-      prodStats[i.s].profit+=(i.sp-i.cp)*i.q;
-      prodStats[i.s].rev+=i.sp*i.q;
-      prodStats[i.s].qty+=i.q;
-    });
-  });
-  var topProds=Object.values(prodStats).sort(function(a,b){return b.profit-a.profit}).slice(0,8);
-
-  /* top customers */
-  var topCust=Object.keys(custStats).map(function(cid){
-    var c=cp(parseInt(cid));
-    return{name:c?c.name:'?',spend:custStats[cid].spend,orders:custStats[cid].orders.length};
-  }).sort(function(a,b){return b.spend-a.spend}).slice(0,10);
-
-  /* outstanding */
-  var outstandingTotal=D.orders.filter(function(o){return o.status==='unpaid';}).reduce(function(s,o){return s+oSell(o);},0);
-  var totalRev=D.orders.reduce(function(s,o){return s+oSell(o);},0);
-  var totalProfit=D.orders.reduce(function(s,o){return s+oSell(o)-oCost(o);},0);
-  var totalOrders=D.orders.length;
-  var avgOrder=totalRev/totalOrders;
-  var overallMargin=totalProfit/totalRev*100;
-
-  /* monthly unique buyers */
-  var monthlyBuyers=months.map(function(m){return Object.keys(monthly[m].buyers).length;});
-
-  /* ── render HTML ── */
-  var isDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;
-  var textCol=isDark?'#9a9a9a':'#6b7280';
-  var gridCol=isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.06)';
-
-  var monthLabels=months.map(function(m){var d=new Date(m+'-01');return d.toLocaleString('default',{month:'short',year:'2-digit'});});
-
-  var html=
-    /* ── KPI row ── */
-    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px">'+
-      kpiCard('Total revenue','A$'+totalRev.toFixed(0),'','#1a1a1a')+
-      kpiCard('Total profit','A$'+totalProfit.toFixed(0),'','#16a34a')+
-      kpiCard('Overall margin',overallMargin.toFixed(1)+'%','vs ~20% industry avg','#1d4ed8')+
-      kpiCard('Outstanding','A$'+outstandingTotal.toFixed(0),'unpaid orders','#d97706')+
-    '</div>'+
-
-    /* ── row 1: monthly rev+profit | margin trend ── */
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">'+
-      '<div class="card">'+
-        '<div class="sec-label" style="margin-bottom:12px">Monthly revenue vs profit</div>'+
-        '<div style="position:relative;height:200px"><canvas id="ins-c1"></canvas></div>'+
-        '<div style="display:flex;gap:16px;margin-top:8px;font-size:11px;color:#888">'+
-          '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#378ADD;margin-right:4px"></span>Revenue</span>'+
-          '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#639922;margin-right:4px"></span>Profit</span>'+
-        '</div>'+
-      '</div>'+
-      '<div class="card">'+
-        '<div class="sec-label" style="margin-bottom:12px">Margin % by month</div>'+
-        '<div style="position:relative;height:200px"><canvas id="ins-c2"></canvas></div>'+
-        '<div style="display:flex;gap:16px;margin-top:8px;font-size:11px;color:#888">'+
-          '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#EF9F27;margin-right:4px"></span>Your margin</span>'+
-          '<span><span style="display:inline-block;width:20px;height:2px;border-top:2px dashed #E24B4A;vertical-align:middle;margin-right:4px"></span>~20% benchmark</span>'+
-        '</div>'+
-      '</div>'+
-    '</div>'+
-
-    /* ── row 2: customer breakdown | monthly buyers ── */
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">'+
-      '<div class="card">'+
-        '<div class="sec-label" style="margin-bottom:4px">Customer activity — 60 WA members</div>'+
-        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">'+
-          kpiMini('Active buyers',veryActive,'ordered in last 30d','#16a34a')+
-          kpiMini('At risk',atRisk,'silent 30+ days','#d97706')+
-          kpiMini('Never ordered',lurkers,'lurkers in WA group','#888')+
-        '</div>'+
-        '<div style="position:relative;height:160px"><canvas id="ins-c3"></canvas></div>'+
-        '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;font-size:11px;color:#888">'+
-          '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#639922;margin-right:4px"></span>Active ('+veryActive+')</span>'+
-          '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#EF9F27;margin-right:4px"></span>At risk ('+atRisk+')</span>'+
-          '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#B4B2A9;margin-right:4px"></span>Never ordered ('+lurkers+')</span>'+
-        '</div>'+
-      '</div>'+
-      '<div class="card">'+
-        '<div class="sec-label" style="margin-bottom:12px">Unique buyers per month</div>'+
-        '<div style="position:relative;height:200px"><canvas id="ins-c4"></canvas></div>'+
-        '<div style="display:flex;gap:16px;margin-top:8px;font-size:11px;color:#888">'+
-          '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#378ADD;margin-right:4px"></span>Buyers that month</span>'+
-        '</div>'+
-      '</div>'+
-    '</div>'+
-
-    /* ── row 3: top products | top customers ── */
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">'+
-      '<div class="card">'+
-        '<div class="sec-label" style="margin-bottom:12px">Top products by profit</div>'+
-        '<div style="position:relative;height:280px"><canvas id="ins-c5"></canvas></div>'+
-      '</div>'+
-      '<div class="card">'+
-        '<div class="sec-label" style="margin-bottom:12px">Top 10 customers by spend</div>'+
-        '<div style="position:relative;height:280px"><canvas id="ins-c6"></canvas></div>'+
-      '</div>'+
-    '</div>'+
-
-    /* ── at risk table ── */
-    (atRiskList.length?
-      '<div class="card" style="margin-bottom:24px">'+
-        '<div class="sec-label" style="margin-bottom:12px">&#9888; At-risk customers — last ordered 30+ days ago</div>'+
-        '<table style="width:100%;border-collapse:collapse;font-size:13px">'+
-          '<thead><tr style="background:#f8f8f7">'+
-            '<th style="padding:8px 12px;text-align:left;font-weight:500;color:#888;font-size:11px">Customer</th>'+
-            '<th style="padding:8px 12px;text-align:center;font-weight:500;color:#888;font-size:11px">Orders</th>'+
-            '<th style="padding:8px 12px;text-align:center;font-weight:500;color:#888;font-size:11px">Total spend</th>'+
-            '<th style="padding:8px 12px;text-align:center;font-weight:500;color:#888;font-size:11px">Last order</th>'+
-            '<th style="padding:8px 12px;text-align:center;font-weight:500;color:#888;font-size:11px">Days silent</th>'+
-            '<th style="padding:8px 12px;text-align:left;font-weight:500;color:#888;font-size:11px">Priority</th>'+
-          '</tr></thead><tbody>'+
-          atRiskList.sort(function(a,b){return b.spend-a.spend;}).map(function(r){
-            var hi=r.orders>=3&&r.spend>=100;
-            var badge=hi?'<span style="background:#fef9c3;color:#854d0e;font-size:11px;padding:2px 8px;border-radius:4px">High</span>':'<span style="background:#fff7ed;color:#c2410c;font-size:11px;padding:2px 8px;border-radius:4px">Medium</span>';
-            return'<tr style="border-top:1px solid #f0f0f0">'+
-              '<td style="padding:9px 12px;font-weight:600">'+esc(r.name)+'</td>'+
-              '<td style="padding:9px 12px;text-align:center">'+r.orders+'</td>'+
-              '<td style="padding:9px 12px;text-align:center">A$'+r.spend.toFixed(0)+'</td>'+
-              '<td style="padding:9px 12px;text-align:center;color:#888">'+r.last+'</td>'+
-              '<td style="padding:9px 12px;text-align:center;color:#dc2626;font-weight:600">'+r.days+' days</td>'+
-              '<td style="padding:9px 12px">'+badge+'</td>'+
-            '</tr>';
-          }).join('')+
-        '</tbody></table>'+
-      '</div>'
-    :'')+
-
-    /* ── loyalty breakdown ── */
-    (function(){
-      var oneTime=Object.values(custStats).filter(function(s){return s.orders.length===1;}).length;
-      var repeat=Object.values(custStats).filter(function(s){return s.orders.length>=2&&s.orders.length<5;}).length;
-      var highVal=Object.values(custStats).filter(function(s){return s.orders.length>=5;}).length;
-      return '<div class="card">'+
-        '<div class="sec-label" style="margin-bottom:12px">Loyalty tiers</div>'+
-        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">'+
-          loyaltyTier('&#127775; Champions','5+ orders',highVal,'#16a34a','#f0fdf4')+
-          loyaltyTier('&#128257; Regulars','2–4 orders',repeat,'#1d4ed8','#eff6ff')+
-          loyaltyTier('&#128064; One-timers','1 order only',oneTime,'#d97706','#fffbeb')+
-        '</div>'+
-      '</div>';
-    })()+
-
-    /* ── Next Run Planner ── */
-    '<div class="card" style="margin-top:24px;border:2px solid #e0e7ff">'+
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">'+
-        '<div>'+
-          '<div style="font-size:15px;font-weight:700;color:#1e3a5f">&#127381; Next Run Planner</div>'+
-          '<div style="font-size:12px;color:#888;margin-top:2px">AI-powered suggestions based on your actual sales data, margins and customer behaviour</div>'+
-        '</div>'+
-        '<button id="planner-btn" class="btn btn-p" onclick="runPlanner()" style="white-space:nowrap">&#10024; Generate plan</button>'+
-      '</div>'+
-      '<div id="planner-out">'+
-        '<div style="text-align:center;padding:32px;color:#bbb;font-size:13px">'+
-          'Click <strong>Generate plan</strong> to get AI recommendations for your next run — what to push, what to drop, and new product ideas for your customer base.'+
-        '</div>'+
-      '</div>'+
-    '</div>'+
-  '';
-
-  wrap.innerHTML=html;
-
-  /* ── mount charts ── */
-  var baseOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{
-    x:{ticks:{color:textCol,font:{size:11}},grid:{color:gridCol}},
-    y:{ticks:{color:textCol,font:{size:11}},grid:{color:gridCol}}
-  }};
-
-  /* c1: monthly rev + profit */
-  var revData=months.map(function(m){return Math.round(monthly[m].rev);});
-  var profData=months.map(function(m){return Math.round(monthly[m].rev-monthly[m].cost);});
-  insightsCharts.push(new Chart(document.getElementById('ins-c1'),{type:'bar',data:{labels:monthLabels,datasets:[
-    {label:'Revenue',data:revData,backgroundColor:'#378ADD',borderRadius:4},
-    {label:'Profit',data:profData,backgroundColor:'#639922',borderRadius:4}
-  ]},options:Object.assign({},baseOpts,{scales:{x:{ticks:{color:textCol},grid:{color:gridCol}},y:{ticks:{color:textCol,font:{size:11},callback:function(v){return'$'+v.toLocaleString();}},grid:{color:gridCol}}}})}));
-
-  /* c2: margin % line */
-  var marginData=months.map(function(m){return parseFloat(((monthly[m].rev-monthly[m].cost)/monthly[m].rev*100).toFixed(1));});
-  insightsCharts.push(new Chart(document.getElementById('ins-c2'),{type:'line',data:{labels:monthLabels,datasets:[
-    {label:'Margin',data:marginData,borderColor:'#EF9F27',backgroundColor:'rgba(239,159,39,0.1)',borderWidth:2,fill:true,tension:0.3,pointRadius:5,pointBackgroundColor:'#EF9F27'},
-    {label:'Benchmark',data:months.map(function(){return 20;}),borderColor:'#E24B4A',borderWidth:1.5,borderDash:[5,4],pointRadius:0}
-  ]},options:Object.assign({},baseOpts,{scales:{x:{ticks:{color:textCol},grid:{color:gridCol}},y:{ticks:{color:textCol,font:{size:11},callback:function(v){return v+'%';}},grid:{color:gridCol},min:0,max:35}}})}));
-
-  /* c3: customer donut */
-  insightsCharts.push(new Chart(document.getElementById('ins-c3'),{type:'doughnut',data:{labels:['Active','At risk','Never ordered'],datasets:[{data:[veryActive,atRisk,lurkers],backgroundColor:['#639922','#EF9F27','#B4B2A9'],borderWidth:2,borderColor:isDark?'#1a1a1a':'#fff'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{display:false}}}}));
-
-  /* c4: monthly buyers bar */
-  insightsCharts.push(new Chart(document.getElementById('ins-c4'),{type:'bar',data:{labels:monthLabels,datasets:[{data:monthlyBuyers,backgroundColor:'#378ADD',borderRadius:5}]},options:Object.assign({},baseOpts,{scales:{x:{ticks:{color:textCol},grid:{display:false}},y:{ticks:{color:textCol,font:{size:11}},grid:{color:gridCol},min:0}}})}));
-
-  /* c5: top products horizontal */
-  insightsCharts.push(new Chart(document.getElementById('ins-c5'),{type:'bar',data:{labels:topProds.map(function(p){return p.name.length>12?p.name.substring(0,12)+'…':p.name;}),datasets:[{data:topProds.map(function(p){return Math.round(p.profit);}),backgroundColor:topProds.map(function(p,i){return i%2===0?'#378ADD':'#639922';}),borderRadius:3}]},options:Object.assign({},baseOpts,{indexAxis:'y',scales:{x:{ticks:{color:textCol,font:{size:10},callback:function(v){return'$'+v;}},grid:{color:gridCol}},y:{ticks:{color:textCol,font:{size:10}},grid:{display:false}}}})}));
-
-  /* c6: top customers horizontal */
-  insightsCharts.push(new Chart(document.getElementById('ins-c6'),{type:'bar',data:{labels:topCust.map(function(c){return c.name;}),datasets:[{data:topCust.map(function(c){return Math.round(c.spend);}),backgroundColor:'#378ADD',borderRadius:3}]},options:Object.assign({},baseOpts,{indexAxis:'y',scales:{x:{ticks:{color:textCol,font:{size:10},callback:function(v){return'$'+v;}},grid:{color:gridCol}},y:{ticks:{color:textCol,font:{size:10}},grid:{display:false}}}})}));
-}
-
-function kpiCard(label,val,sub,color){
-  return'<div class="mc"><div class="ml">'+label+'</div>'+
-    '<div class="mv" style="color:'+color+'">'+val+'</div>'+
-    (sub?'<div style="font-size:11px;color:#aaa;margin-top:4px">'+sub+'</div>':'')+
-  '</div>';
-}
-function kpiMini(label,val,sub,color){
-  return'<div style="text-align:center;padding:10px 6px;background:#f8f8f7;border-radius:8px">'+
-    '<div style="font-size:20px;font-weight:700;color:'+color+'">'+val+'</div>'+
-    '<div style="font-size:11px;font-weight:600;color:#555;margin-top:2px">'+label+'</div>'+
-    '<div style="font-size:10px;color:#aaa">'+sub+'</div>'+
-  '</div>';
-}
-function loyaltyTier(icon,sub,count,color,bg){
-  return'<div style="background:'+bg+';border-radius:10px;padding:16px;text-align:center">'+
-    '<div style="font-size:22px;margin-bottom:6px">'+icon+'</div>'+
-    '<div style="font-size:26px;font-weight:700;color:'+color+'">'+count+'</div>'+
-    '<div style="font-size:12px;font-weight:600;color:#555">'+sub+'</div>'+
-  '</div>';
-}
-
-/* ── Next Run Planner — Claude AI ── */
-function runPlanner(){
-  var btn=document.getElementById('planner-btn');
-  var out=document.getElementById('planner-out');
-  if(!btn||!out) return;
-  btn.disabled=true; btn.textContent='Thinking…';
-  out.innerHTML='<div style="text-align:center;padding:32px;color:#888;font-size:13px">'+
-    '<div style="font-size:24px;margin-bottom:8px">&#129302;</div>Analysing your data and researching new product ideas…</div>';
-
-  /* ── Build data summary for the prompt ── */
-  var prodStats={};
-  D.orders.forEach(function(o){
-    o.items.forEach(function(i){
-      var p=sp(i.s); if(!p) return;
-      if(!prodStats[i.s]) prodStats[i.s]={name:p.name,cost:p.cost,sell:p.sell,profit:0,rev:0,qty:0,orders:0,months:{}};
-      prodStats[i.s].profit+=(i.sp-i.cp)*i.q;
-      prodStats[i.s].rev+=i.sp*i.q;
-      prodStats[i.s].qty+=i.q;
-      prodStats[i.s].orders++;
-      prodStats[i.s].months[o.date.substring(0,7)]=1;
-    });
-  });
-
-  var allMonths=Array.from(new Set(D.orders.map(function(o){return o.date.substring(0,7);}))).sort();
-  var latestMonth=allMonths[allMonths.length-1];
-
-  var prodList=Object.values(prodStats).sort(function(a,b){return b.profit-a.profit});
-  var prodSummary=prodList.map(function(p){
-    var margin=p.rev>0?((p.profit/p.rev)*100).toFixed(0):0;
-    var months=Object.keys(p.months).length;
-    var trend=p.months[latestMonth]?'active this month':'not ordered recently';
-    return p.name+': margin='+margin+'%, profit=A$'+p.profit.toFixed(0)+', orders='+p.orders+', months active='+months+'/'+allMonths.length+', '+trend;
-  }).join('\n');
-
-  var custCount=D.customers.length;
-  var totalOrders=D.orders.length;
-  var avgOrder=(D.orders.reduce(function(s,o){return s+oSell(o);},0)/totalOrders).toFixed(0);
-  var topCustNames=Object.keys((function(){
-    var cs={};
-    D.orders.forEach(function(o){cs[o.cid]=(cs[o.cid]||0)+oSell(o);});
-    return cs;
-  })()).map(function(cid){
-    var c=cp(parseInt(cid)); return c?c.name:'?';
-  }).slice(0,5).join(', ');
-
-  var today=new Date();
-  var season=(['Dec','Jan','Feb'].indexOf(today.toLocaleString('default',{month:'short'}))>=0)?'summer (Australia)':
-             (['Mar','Apr','May'].indexOf(today.toLocaleString('default',{month:'short'}))>=0)?'autumn (Australia)':
-             (['Jun','Jul','Aug'].indexOf(today.toLocaleString('default',{month:'short'}))>=0)?'winter (Australia)':'spring (Australia)';
-
-  var prompt=
-'You are a business advisor for a small WhatsApp-based Chinese community group buying business in Wollongong, Australia. The operator sources premium Asian groceries and specialty foods and sells to a community of ~60 members.\n\n'+
-'Current season: '+season+'\n'+
-'Active customers: '+custCount+', Total orders: '+totalOrders+', Avg order value: A$'+avgOrder+'\n'+
-'Top customers: '+topCustNames+'\n\n'+
-'CURRENT PRODUCT PERFORMANCE:\n'+prodSummary+'\n\n'+
-'Please provide a structured Next Run Planner with exactly these 4 sections. Be specific, practical and concise. Format using simple HTML (no markdown). Use <h3> for section headers and <ul><li> for lists. Do NOT use triple backticks.\n\n'+
-'**Section 1 — PUSH HARDER (2-3 products)**\nExisting products that are undersold relative to their margin. Explain briefly why to push each one and suggest a simple tactic (e.g. bundle, mention in group, limited qty).\n\n'+
-'**Section 2 — RECONSIDER (1-2 products)**\nProducts with poor margin AND low order frequency that may not be worth sourcing. Be honest.\n\n'+
-'**Section 3 — CROSS-SELL OPPORTUNITIES (2-3 ideas)**\nProduct combinations your top customers already buy that others haven\'t tried — suggest pairing them in the next run announcement.\n\n'+
-'**Section 4 — NEW PRODUCT IDEAS (4-5 ideas)**\nFresh product ideas suited to: Chinese community in Australia, current season ('+season+'), premium/specialty positioning, and your existing customer profile. For each idea give: product name, why it fits this customer base, estimated margin range (%), and where to source in Australia if possible.\n\n'+
-'Keep the whole response tight and actionable. No fluff.';
-
-  fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      model:'claude-sonnet-4-20250514',
-      max_tokens:1500,
-      messages:[{role:'user',content:prompt}]
-    })
-  })
-  .then(function(r){return r.json();})
-  .then(function(data){
-    btn.disabled=false; btn.innerHTML='&#128257; Regenerate';
-    if(data.error){
-      out.innerHTML='<div style="color:#dc2626;padding:16px;font-size:13px">Error: '+esc(data.error.message)+'</div>';
-      return;
-    }
-    var text=(data.content&&data.content[0]&&data.content[0].text)||'No response.';
-    /* clean up any accidental markdown code fences */
-    text=text.replace(/```html?/gi,'').replace(/```/g,'');
-    out.innerHTML=
-      '<div style="font-size:13px;line-height:1.8;color:#1a1a1a" id="planner-content">'+text+'</div>'+
-      '<div style="margin-top:16px;padding-top:16px;border-top:1px solid #f0f0f0;display:flex;gap:10px;align-items:center">'+
-        '<button class="btn btn-o btn-sm" onclick="copyPlannerText()">&#128203; Copy to clipboard</button>'+
-        '<span style="font-size:11px;color:#aaa">Generated '+new Date().toLocaleTimeString()+' · based on '+totalOrders+' orders</span>'+
-      '</div>';
-    /* style the injected HTML */
-    out.querySelectorAll('h3').forEach(function(h){
-      h.style.cssText='font-size:13px;font-weight:700;color:#1e3a5f;margin:18px 0 8px;padding:6px 10px;background:#f0f4ff;border-left:3px solid #378ADD;border-radius:0 6px 6px 0';
-    });
-    out.querySelectorAll('ul').forEach(function(u){u.style.cssText='margin:0 0 12px 18px;';});
-    out.querySelectorAll('li').forEach(function(l){l.style.cssText='margin-bottom:6px;color:#333;';});
-    out.querySelectorAll('strong').forEach(function(s){s.style.color='#1e3a5f';});
-  })
-  .catch(function(err){
-    btn.disabled=false; btn.innerHTML='&#10024; Generate plan';
-    var isFile=location.protocol==='file:';
-    out.innerHTML='<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:20px;font-size:13px">'+
-      '<div style="font-weight:700;color:#c2410c;margin-bottom:8px">&#128683; '+(isFile?'Cannot connect from a local file':'Could not connect to AI')+'</div>'+
-      (isFile?
-        '<div style="color:#78350f;line-height:1.7">The AI planner requires the app to be hosted on a real URL — browsers block API calls from <code>file://</code> for security reasons (CORS policy).<br><br>'+
-        '<strong>Fix:</strong> Host this file on <strong>GitHub Pages</strong> (free, takes ~5 min) and both the AI Planner and Google Drive sync will work instantly.<br><br>'+
-        'Want step-by-step instructions? Ask Claude: <em>"Walk me through GitHub Pages setup"</em></div>'
-      :
-        '<div style="color:#78350f">Could not reach the AI. Check your internet connection.<br><small style="color:#aaa">'+esc(err.message)+'</small></div>'
-      )+
-    '</div>';
-  });
-}
-
-function copyPlannerText(){
-  var el=document.getElementById('planner-content');
-  if(!el) return;
-  var text=el.innerText||el.textContent;
-  navigator.clipboard.writeText(text).then(function(){toast('Copied to clipboard ✓');}).catch(function(){
-    /* fallback */
-    var ta=document.createElement('textarea');
-    ta.value=text; document.body.appendChild(ta); ta.select();
-    document.execCommand('copy'); document.body.removeChild(ta);
-    toast('Copied ✓');
-  });
-}
-
 loadData();
 renderDash();
 
@@ -3713,6 +3375,246 @@ window.gisLoaded=function(){ gdInitGis(); };
     if(typeof google!=='undefined'&&google.accounts&&!GD.gisReady) gdInitGis();
   }, 2000);
 })();
+
+/* ════════════════════════════════════════
+   PASSWORD + AUTO-LOCK
+   ════════════════════════════════════════ */
+function lkHash(s){
+  var h1=0xdeadbeef,h2=0x41c6ce57;
+  for(var i=0;i<s.length;i++){var ch=s.charCodeAt(i);h1=Math.imul(h1^ch,2654435761);h2=Math.imul(h2^ch,1597334677);}
+  h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);
+  h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);
+  return(4294967296*(2097151&h2)+(h1>>>0)).toString(36)+s.length.toString(36);
+}
+var LK={IDLE_MS:15*60*1000,mode:'',idleTimer:null,barStart:0,barTick:null};
+function lkIsSetup(){return!!localStorage.getItem('om_pw');}
+function lkInit(){
+  var scr=document.getElementById('lock-screen');
+  scr.style.display='flex';
+  document.getElementById('app-wrap').style.display='none';
+  if(!lkIsSetup()){
+    LK.mode='setup';
+    document.getElementById('lk-icon').textContent='🛡️';
+    document.getElementById('lk-title').textContent='Create a password';
+    document.getElementById('lk-sub').textContent='Choose a password to protect your Order Manager.';
+    document.getElementById('lk-input').placeholder='Choose a password (min 4 chars)';
+    document.getElementById('lk-btn').textContent='Set password & enter';
+    document.getElementById('lk-hint').textContent="Don't forget it — no recovery without data reset.";
+  } else {
+    LK.mode='unlock';
+    document.getElementById('lk-icon').textContent='🔒';
+    document.getElementById('lk-title').textContent='Order Manager';
+    document.getElementById('lk-sub').textContent='Enter your password to continue';
+    document.getElementById('lk-input').placeholder='••••••••';
+    document.getElementById('lk-btn').textContent='Unlock';
+    document.getElementById('lk-hint').innerHTML='<a onclick="lkForgot()">Forgot password? (resets all data)</a>';
+  }
+  setTimeout(function(){var inp=document.getElementById('lk-input');inp.value='';inp.classList.remove('shake');inp.focus();document.getElementById('lk-err').textContent='';},80);
+}
+function lkSubmit(){
+  var inp=document.getElementById('lk-input');var val=inp.value;var err=document.getElementById('lk-err');
+  if(LK.mode==='setup'){
+    if(val.length<4){err.textContent='Please use at least 4 characters.';inp.classList.add('shake');return;}
+    localStorage.setItem('om_pw',lkHash(val));lkUnlock();
+  } else {
+    if(lkHash(val)===localStorage.getItem('om_pw')){lkUnlock();}
+    else{err.textContent='Incorrect password — try again.';inp.value='';inp.classList.add('shake');inp.focus();}
+  }
+}
+function lkUnlock(){
+  document.getElementById('lock-screen').style.display='none';
+  document.getElementById('app-wrap').style.display='block';
+  document.getElementById('lk-err').textContent='';
+  lkResetIdle();
+}
+function lkLock(){
+  clearTimeout(LK.idleTimer);clearTimeout(LK.barTick);
+  document.getElementById('lock-idle-bar').style.width='100%';
+  lkInit();
+}
+function lkResetIdle(){
+  clearTimeout(LK.idleTimer);clearTimeout(LK.barTick);
+  LK.barStart=Date.now();
+  function tickBar(){var pct=Math.max(0,100-(Date.now()-LK.barStart)/LK.IDLE_MS*100);var bar=document.getElementById('lock-idle-bar');if(bar)bar.style.width=pct+'%';if(pct>0)LK.barTick=setTimeout(tickBar,3000);}
+  tickBar();
+  LK.idleTimer=setTimeout(function(){toast('Locked due to inactivity.');lkLock();},LK.IDLE_MS);
+  ['click','keydown','mousemove','touchstart','scroll'].forEach(function(e){document.removeEventListener(e,lkActivity,true);document.addEventListener(e,lkActivity,true);});
+}
+function lkActivity(){lkResetIdle();}
+function lkForgot(){
+  if(!confirm('Reset password?\n\nWARNING: This permanently deletes ALL your data.\n\nOnly proceed if you have a backup.'))return;
+  if(!confirm('Last chance — are you sure?'))return;
+  localStorage.clear();location.reload();
+}
+function lkChangePw(){
+  if(document.getElementById('chpw-ov'))return;
+  var ov=document.createElement('div');ov.className='chpw-overlay';ov.id='chpw-ov';
+  ov.innerHTML='<div class="chpw-box"><h2>🔑 Change Password</h2>'+
+    '<label>Current password</label><input type="password" id="cp-cur" onkeydown="if(event.key===\'Enter\')lkSavePw()">'+
+    '<label>New password</label><input type="password" id="cp-new" placeholder="Min 4 characters" onkeydown="if(event.key===\'Enter\')lkSavePw()">'+
+    '<label>Confirm new password</label><input type="password" id="cp-con" onkeydown="if(event.key===\'Enter\')lkSavePw()">'+
+    '<div class="chpw-err" id="cp-err"></div>'+
+    '<div class="chpw-btns"><button class="btn btn-o" onclick="document.getElementById(\'chpw-ov\').remove()">Cancel</button>'+
+    '<button class="btn btn-p" onclick="lkSavePw()">Update</button></div></div>';
+  document.body.appendChild(ov);
+  setTimeout(function(){document.getElementById('cp-cur').focus();},60);
+}
+function lkSavePw(){
+  var cur=document.getElementById('cp-cur').value;var nw=document.getElementById('cp-new').value;var con=document.getElementById('cp-con').value;var err=document.getElementById('cp-err');
+  if(lkHash(cur)!==localStorage.getItem('om_pw')){err.textContent='Current password incorrect.';return;}
+  if(nw.length<4){err.textContent='New password must be at least 4 characters.';return;}
+  if(nw!==con){err.textContent='Passwords do not match.';return;}
+  localStorage.setItem('om_pw',lkHash(nw));document.getElementById('chpw-ov').remove();toast('Password updated ✓');
+}
+
+/* ════════════════════════════════════════
+   INSIGHTS TAB
+   ════════════════════════════════════════ */
+var insightsCharts=[];
+function renderInsights(){
+  var wrap=document.getElementById('insights-wrap');
+  insightsCharts.forEach(function(c){try{c.destroy();}catch(e){}});insightsCharts=[];
+  if(!D.orders.length){wrap.innerHTML='<div class="empty" style="padding:40px;text-align:center;color:#aaa">No data yet.</div>';return;}
+  var today=new Date();
+  var monthly={};
+  D.orders.forEach(function(o){var m=o.date.substring(0,7);if(!monthly[m])monthly[m]={rev:0,cost:0,orders:0,buyers:{}};monthly[m].rev+=oSell(o);monthly[m].cost+=oCost(o);monthly[m].orders++;monthly[m].buyers[o.cid]=1;});
+  var months=Object.keys(monthly).sort();
+  var custStats={};
+  D.orders.forEach(function(o){if(!custStats[o.cid])custStats[o.cid]={orders:[],spend:0,dates:[]};custStats[o.cid].orders.push(o);custStats[o.cid].spend+=oSell(o);custStats[o.cid].dates.push(o.date);});
+  var veryActive=0,atRisk=0,atRiskList=[];
+  Object.keys(custStats).forEach(function(cid){var s=custStats[cid];var last=new Date(s.dates.slice().sort().pop());var days=Math.round((today-last)/86400000);if(days<=30)veryActive++;else{atRisk++;var c=cp(parseInt(cid));atRiskList.push({name:c?c.name:'?',orders:s.orders.length,spend:s.spend,last:s.dates.slice().sort().pop(),days:days});}});
+  var lurkers=Math.max(0,60-Object.keys(custStats).length);
+  var prodStats={};
+  D.orders.forEach(function(o){o.items.forEach(function(i){var p=sp(i.s);if(!p)return;if(!prodStats[i.s])prodStats[i.s]={name:p.name,profit:0,rev:0,qty:0};prodStats[i.s].profit+=(i.sp-i.cp)*i.q;prodStats[i.s].rev+=i.sp*i.q;prodStats[i.s].qty+=i.q;});});
+  var topProds=Object.values(prodStats).sort(function(a,b){return b.profit-a.profit}).slice(0,8);
+  var topCust=Object.keys(custStats).map(function(cid){var c=cp(parseInt(cid));return{name:c?c.name:'?',spend:custStats[cid].spend,orders:custStats[cid].orders.length};}).sort(function(a,b){return b.spend-a.spend}).slice(0,10);
+  var totalRev=D.orders.reduce(function(s,o){return s+oSell(o);},0);
+  var totalProfit=D.orders.reduce(function(s,o){return s+oSell(o)-oCost(o);},0);
+  var outstanding=D.orders.filter(function(o){return o.status==='unpaid';}).reduce(function(s,o){return s+oSell(o);},0);
+  var margin=totalProfit/totalRev*100;
+  var isDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;
+  var textCol=isDark?'#9a9a9a':'#6b7280';var gridCol=isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.06)';
+  var monthLabels=months.map(function(m){var d=new Date(m+'-01');return d.toLocaleString('default',{month:'short',year:'2-digit'});});
+  var monthlyBuyers=months.map(function(m){return Object.keys(monthly[m].buyers).length;});
+  var html=
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px">'+
+      iKpi('Total revenue','A$'+totalRev.toFixed(0),'','#1a1a1a')+iKpi('Total profit','A$'+totalProfit.toFixed(0),'','#16a34a')+
+      iKpi('Overall margin',margin.toFixed(1)+'%','~20% industry','#1d4ed8')+iKpi('Outstanding','A$'+outstanding.toFixed(0),'unpaid','#d97706')+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">'+
+      '<div class="card"><div class="sec-label" style="margin-bottom:12px">Monthly revenue vs profit</div><div style="position:relative;height:200px"><canvas id="ins-c1"></canvas></div>'+
+      '<div style="display:flex;gap:16px;margin-top:8px;font-size:11px;color:#888"><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#378ADD;margin-right:4px"></span>Revenue</span><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#639922;margin-right:4px"></span>Profit</span></div></div>'+
+      '<div class="card"><div class="sec-label" style="margin-bottom:12px">Margin % by month</div><div style="position:relative;height:200px"><canvas id="ins-c2"></canvas></div>'+
+      '<div style="display:flex;gap:16px;margin-top:8px;font-size:11px;color:#888"><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#EF9F27;margin-right:4px"></span>Your margin</span><span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:20px;height:0;border-top:2px dashed #E24B4A"></span>~20% benchmark</span></div></div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">'+
+      '<div class="card"><div class="sec-label" style="margin-bottom:8px">Customer activity — 60 WA members</div>'+
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">'+iMini('Active buyers',veryActive,'last 30d','#16a34a')+iMini('At risk',atRisk,'30+ days silent','#d97706')+iMini('Never ordered',lurkers,'lurkers','#888')+'</div>'+
+      '<div style="position:relative;height:160px"><canvas id="ins-c3"></canvas></div>'+
+      '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;font-size:11px;color:#888">'+
+        '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#639922;margin-right:4px"></span>Active ('+veryActive+')</span>'+
+        '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#EF9F27;margin-right:4px"></span>At risk ('+atRisk+')</span>'+
+        '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#B4B2A9;margin-right:4px"></span>Never ordered ('+lurkers+')</span>'+
+      '</div></div>'+
+      '<div class="card"><div class="sec-label" style="margin-bottom:12px">Unique buyers per month</div><div style="position:relative;height:220px"><canvas id="ins-c4"></canvas></div></div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">'+
+      '<div class="card"><div class="sec-label" style="margin-bottom:12px">Top products by profit</div><div style="position:relative;height:280px"><canvas id="ins-c5"></canvas></div></div>'+
+      '<div class="card"><div class="sec-label" style="margin-bottom:12px">Top 10 customers by spend</div><div style="position:relative;height:280px"><canvas id="ins-c6"></canvas></div></div>'+
+    '</div>'+
+    (atRiskList.length?
+      '<div class="card" style="margin-bottom:24px"><div class="sec-label" style="margin-bottom:12px">⚠️ At-risk customers — last ordered 30+ days ago</div>'+
+      '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:#f8f8f7">'+
+        '<th style="padding:8px 12px;text-align:left;font-weight:500;color:#888;font-size:11px">Customer</th>'+
+        '<th style="padding:8px 12px;text-align:center;font-weight:500;color:#888;font-size:11px">Orders</th>'+
+        '<th style="padding:8px 12px;text-align:center;font-weight:500;color:#888;font-size:11px">Spend</th>'+
+        '<th style="padding:8px 12px;text-align:center;font-weight:500;color:#888;font-size:11px">Last order</th>'+
+        '<th style="padding:8px 12px;text-align:center;font-weight:500;color:#888;font-size:11px">Days silent</th>'+
+        '<th style="padding:8px 12px;text-align:left;font-weight:500;color:#888;font-size:11px">Priority</th>'+
+      '</tr></thead><tbody>'+
+      atRiskList.sort(function(a,b){return b.spend-a.spend;}).map(function(r){
+        var hi=r.orders>=3&&r.spend>=100;
+        var badge=hi?'<span style="background:#fef9c3;color:#854d0e;font-size:11px;padding:2px 8px;border-radius:4px">High</span>':'<span style="background:#fff7ed;color:#c2410c;font-size:11px;padding:2px 8px;border-radius:4px">Medium</span>';
+        return'<tr style="border-top:1px solid #f0f0f0"><td style="padding:9px 12px;font-weight:600">'+esc(r.name)+'</td><td style="padding:9px 12px;text-align:center">'+r.orders+'</td><td style="padding:9px 12px;text-align:center">A$'+r.spend.toFixed(0)+'</td><td style="padding:9px 12px;text-align:center;color:#888">'+r.last+'</td><td style="padding:9px 12px;text-align:center;color:#dc2626;font-weight:600">'+r.days+' days</td><td style="padding:9px 12px">'+badge+'</td></tr>';
+      }).join('')+'</tbody></table></div>':'')+
+    (function(){var oneTime=Object.values(custStats).filter(function(s){return s.orders.length===1;}).length;var repeat=Object.values(custStats).filter(function(s){return s.orders.length>=2&&s.orders.length<5;}).length;var highVal=Object.values(custStats).filter(function(s){return s.orders.length>=5;}).length;
+      return'<div class="card" style="margin-bottom:24px"><div class="sec-label" style="margin-bottom:12px">Loyalty tiers</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">'+
+        iLoyalty('🏆 Champions','5+ orders',highVal,'#16a34a','#f0fdf4')+iLoyalty('🔄 Regulars','2–4 orders',repeat,'#1d4ed8','#eff6ff')+iLoyalty('👀 One-timers','1 order only',oneTime,'#d97706','#fffbeb')+
+      '</div></div>';
+    })()+
+    '<div class="card" style="border:2px solid #e0e7ff">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">'+
+        '<div><div style="font-size:15px;font-weight:700;color:#1e3a5f">🎯 Next Run Planner</div>'+
+        '<div style="font-size:12px;color:#888;margin-top:2px">AI suggestions based on your actual sales data, margins and customer behaviour</div></div>'+
+        '<button id="planner-btn" class="btn btn-p" onclick="runPlanner()" style="white-space:nowrap">✨ Generate plan</button>'+
+      '</div>'+
+      '<div id="planner-out"><div style="text-align:center;padding:32px;color:#bbb;font-size:13px">Click <strong>Generate plan</strong> to get AI recommendations — what to push, what to drop, and new product ideas.</div></div>'+
+    '</div>';
+  wrap.innerHTML=html;
+  var baseOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:textCol,font:{size:11}},grid:{color:gridCol}},y:{ticks:{color:textCol,font:{size:11}},grid:{color:gridCol}}}};
+  insightsCharts.push(new Chart(document.getElementById('ins-c1'),{type:'bar',data:{labels:monthLabels,datasets:[{label:'Revenue',data:months.map(function(m){return Math.round(monthly[m].rev);}),backgroundColor:'#378ADD',borderRadius:4},{label:'Profit',data:months.map(function(m){return Math.round(monthly[m].rev-monthly[m].cost);}),backgroundColor:'#639922',borderRadius:4}]},options:Object.assign({},baseOpts,{scales:{x:{ticks:{color:textCol},grid:{color:gridCol}},y:{ticks:{color:textCol,font:{size:11},callback:function(v){return'$'+v.toLocaleString();}},grid:{color:gridCol}}}})}));
+  insightsCharts.push(new Chart(document.getElementById('ins-c2'),{type:'line',data:{labels:monthLabels,datasets:[{label:'Margin',data:months.map(function(m){return parseFloat(((monthly[m].rev-monthly[m].cost)/monthly[m].rev*100).toFixed(1));}),borderColor:'#EF9F27',backgroundColor:'rgba(239,159,39,0.1)',borderWidth:2,fill:true,tension:0.3,pointRadius:5,pointBackgroundColor:'#EF9F27'},{label:'Benchmark',data:months.map(function(){return 20;}),borderColor:'#E24B4A',borderWidth:1.5,borderDash:[5,4],pointRadius:0}]},options:Object.assign({},baseOpts,{scales:{x:{ticks:{color:textCol},grid:{color:gridCol}},y:{ticks:{color:textCol,font:{size:11},callback:function(v){return v+'%';}},grid:{color:gridCol},min:0,max:35}}})}));
+  insightsCharts.push(new Chart(document.getElementById('ins-c3'),{type:'doughnut',data:{labels:['Active','At risk','Never ordered'],datasets:[{data:[veryActive,atRisk,lurkers],backgroundColor:['#639922','#EF9F27','#B4B2A9'],borderWidth:2,borderColor:isDark?'#1a1a1a':'#fff'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{display:false}}}}));
+  insightsCharts.push(new Chart(document.getElementById('ins-c4'),{type:'bar',data:{labels:monthLabels,datasets:[{data:monthlyBuyers,backgroundColor:'#378ADD',borderRadius:5}]},options:Object.assign({},baseOpts,{scales:{x:{ticks:{color:textCol},grid:{display:false}},y:{ticks:{color:textCol,font:{size:11}},grid:{color:gridCol},min:0}}})}));
+  insightsCharts.push(new Chart(document.getElementById('ins-c5'),{type:'bar',data:{labels:topProds.map(function(p){return p.name.length>12?p.name.substring(0,12)+'…':p.name;}),datasets:[{data:topProds.map(function(p){return Math.round(p.profit);}),backgroundColor:topProds.map(function(p,i){return i%2===0?'#378ADD':'#639922';}),borderRadius:3}]},options:Object.assign({},baseOpts,{indexAxis:'y',scales:{x:{ticks:{color:textCol,font:{size:10},callback:function(v){return'$'+v;}},grid:{color:gridCol}},y:{ticks:{color:textCol,font:{size:10}},grid:{display:false}}}})}));
+  insightsCharts.push(new Chart(document.getElementById('ins-c6'),{type:'bar',data:{labels:topCust.map(function(c){return c.name;}),datasets:[{data:topCust.map(function(c){return Math.round(c.spend);}),backgroundColor:'#378ADD',borderRadius:3}]},options:Object.assign({},baseOpts,{indexAxis:'y',scales:{x:{ticks:{color:textCol,font:{size:10},callback:function(v){return'$'+v;}},grid:{color:gridCol}},y:{ticks:{color:textCol,font:{size:10}},grid:{display:false}}}})}));
+}
+function iKpi(l,v,s,c){return'<div class="mc"><div class="ml">'+l+'</div><div class="mv" style="color:'+c+'">'+v+'</div>'+(s?'<div style="font-size:11px;color:#aaa;margin-top:4px">'+s+'</div>':'')+'</div>';}
+function iMini(l,v,s,c){return'<div style="text-align:center;padding:10px 6px;background:#f8f8f7;border-radius:8px"><div style="font-size:20px;font-weight:700;color:'+c+'">'+v+'</div><div style="font-size:11px;font-weight:600;color:#555;margin-top:2px">'+l+'</div><div style="font-size:10px;color:#aaa">'+s+'</div></div>';}
+function iLoyalty(icon,sub,count,color,bg){return'<div style="background:'+bg+';border-radius:10px;padding:16px;text-align:center"><div style="font-size:22px;margin-bottom:6px">'+icon+'</div><div style="font-size:26px;font-weight:700;color:'+color+'">'+count+'</div><div style="font-size:12px;font-weight:600;color:#555">'+sub+'</div></div>';}
+
+/* ── Next Run Planner ── */
+function runPlanner(){
+  var btn=document.getElementById('planner-btn');var out=document.getElementById('planner-out');
+  if(!btn||!out)return;
+  if(location.protocol==='file:'){
+    out.innerHTML='<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:20px;font-size:13px">'+
+      '<div style="font-weight:700;color:#c2410c;margin-bottom:8px">🚫 Cannot connect from a local file</div>'+
+      '<div style="color:#78350f;line-height:1.7">The AI planner requires the app to be hosted on a real URL — browsers block API calls from <code>file://</code> (CORS policy).<br><br>'+
+      '<strong>Fix:</strong> Upload this file to <strong>GitHub Pages</strong> and it will work instantly.</div></div>';
+    return;
+  }
+  btn.disabled=true;btn.textContent='Thinking…';
+  out.innerHTML='<div style="text-align:center;padding:32px;color:#888;font-size:13px"><div style="font-size:24px;margin-bottom:8px">🤖</div>Analysing your data…</div>';
+  var prodStats={};
+  D.orders.forEach(function(o){o.items.forEach(function(i){var p=sp(i.s);if(!p)return;if(!prodStats[i.s])prodStats[i.s]={name:p.name,profit:0,rev:0,qty:0,orders:0,months:{}};prodStats[i.s].profit+=(i.sp-i.cp)*i.q;prodStats[i.s].rev+=i.sp*i.q;prodStats[i.s].qty+=i.q;prodStats[i.s].orders++;prodStats[i.s].months[o.date.substring(0,7)]=1;});});
+  var allMonths=Array.from(new Set(D.orders.map(function(o){return o.date.substring(0,7);}))).sort();
+  var latestMonth=allMonths[allMonths.length-1];
+  var prodList=Object.values(prodStats).sort(function(a,b){return b.profit-a.profit});
+  var prodSummary=prodList.map(function(p){var margin=p.rev>0?((p.profit/p.rev)*100).toFixed(0):0;var months=Object.keys(p.months).length;return p.name+': margin='+margin+'%, profit=A$'+p.profit.toFixed(0)+', orders='+p.orders+', months active='+months+'/'+allMonths.length+(p.months[latestMonth]?', active this month':', not ordered recently');}).join('\n');
+  var totalOrders=D.orders.length;
+  var avgOrder=(D.orders.reduce(function(s,o){return s+oSell(o);},0)/totalOrders).toFixed(0);
+  var mo=new Date().toLocaleString('default',{month:'short'});
+  var season=(['Dec','Jan','Feb'].indexOf(mo)>=0)?'summer (Australia)':(['Mar','Apr','May'].indexOf(mo)>=0)?'autumn (Australia)':(['Jun','Jul','Aug'].indexOf(mo)>=0)?'winter (Australia)':'spring (Australia)';
+  var prompt='You are a business advisor for a small WhatsApp-based Chinese community group buying business in Wollongong, Australia. Premium Asian groceries and specialty foods, ~60 members.\n\nSeason: '+season+'\nCustomers: '+D.customers.length+', Orders: '+totalOrders+', Avg order: A$'+avgOrder+'\n\nPRODUCT PERFORMANCE:\n'+prodSummary+'\n\nProvide a Next Run Planner with exactly 4 sections using simple HTML (h3 headers, ul/li lists, no markdown backticks):\n1. PUSH HARDER (2-3 products) — undersold high-margin items + specific tactic\n2. RECONSIDER (1-2 products) — poor margin + low frequency, worth dropping\n3. CROSS-SELL OPPORTUNITIES (2-3 ideas) — product combos to announce together\n4. NEW PRODUCT IDEAS (4-5 ideas) — suited to Chinese community in Australia, '+season+', premium positioning. Include: name, why it fits, estimated margin %, where to source in Australia.\n\nBe specific and concise. No fluff.';
+  fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1500,messages:[{role:'user',content:prompt}]})})
+  .then(function(r){return r.json();})
+  .then(function(data){
+    btn.disabled=false;btn.innerHTML='🔄 Regenerate';
+    if(data.error){out.innerHTML='<div style="color:#dc2626;padding:16px;font-size:13px">Error: '+esc(data.error.message)+'</div>';return;}
+    var text=(data.content&&data.content[0]&&data.content[0].text)||'No response.';
+    text=text.replace(/```html?/gi,'').replace(/```/g,'');
+    out.innerHTML='<div style="font-size:13px;line-height:1.8;color:#1a1a1a" id="planner-content">'+text+'</div>'+
+      '<div style="margin-top:16px;padding-top:16px;border-top:1px solid #f0f0f0;display:flex;gap:10px;align-items:center">'+
+        '<button class="btn btn-o btn-sm" onclick="copyPlannerText()">📋 Copy</button>'+
+        '<span style="font-size:11px;color:#aaa">Generated '+new Date().toLocaleTimeString()+' · '+totalOrders+' orders analysed</span></div>';
+    out.querySelectorAll('h3').forEach(function(h){h.style.cssText='font-size:13px;font-weight:700;color:#1e3a5f;margin:18px 0 8px;padding:6px 10px;background:#f0f4ff;border-left:3px solid #378ADD;border-radius:0 6px 6px 0';});
+    out.querySelectorAll('ul').forEach(function(u){u.style.cssText='margin:0 0 12px 18px;';});
+    out.querySelectorAll('li').forEach(function(l){l.style.cssText='margin-bottom:6px;color:#333;';});
+  })
+  .catch(function(err){
+    btn.disabled=false;btn.innerHTML='✨ Generate plan';
+    out.innerHTML='<div style="color:#dc2626;padding:16px;font-size:13px">Could not connect. Check your internet connection.<br><small>'+esc(err.message)+'</small></div>';
+  });
+}
+function copyPlannerText(){
+  var el=document.getElementById('planner-content');if(!el)return;
+  var text=el.innerText||el.textContent;
+  navigator.clipboard.writeText(text).then(function(){toast('Copied ✓');}).catch(function(){var ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('Copied ✓');});
+}
+
+/* boot */
+lkInit();
 
 </script>
 </body>
