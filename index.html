@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -210,6 +214,82 @@ textarea{resize:vertical;min-height:60px}
 .load-item{display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.08);font-size:13px}
 .load-item:last-child{border-bottom:none}
 .load-qty{font-weight:700;font-size:15px;min-width:48px;text-align:right}
+/* ══════════════════════════════════════
+   MOBILE RESPONSIVE — screens ≤768px
+   ══════════════════════════════════════ */
+@media(max-width:768px){
+  /* topbar */
+  .topbar{padding:10px 14px;flex-wrap:nowrap;position:sticky;top:0;z-index:100}
+  .topbar-title{font-size:14px}
+  .topbar-sub{display:none}
+  #topbar-actions{display:none;flex-direction:column;gap:8px;position:absolute;top:52px;right:0;left:0;background:#fff;border-bottom:1px solid #e5e5e5;padding:12px 14px;z-index:200;box-shadow:0 4px 12px rgba(0,0,0,.08)}
+  #topbar-actions.open{display:flex}
+  #topbar-menu-btn{display:flex!important}
+
+  /* shell */
+  .shell{padding:8px 0}
+
+  /* tabs — horizontal scroll */
+  .tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 8px;scrollbar-width:none;white-space:nowrap;display:block}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{padding:10px 14px;font-size:12px;display:inline-block}
+
+  /* pad */
+  .pad{padding:12px}
+
+  /* KPI grids */
+  .mg{grid-template-columns:1fr 1fr!important}
+  .mg3{grid-template-columns:1fr 1fr!important}
+  .r3{grid-template-columns:1fr 1fr!important}
+  .r4{grid-template-columns:1fr 1fr!important}
+
+  /* two-col customer layout → stack */
+  .two-col{grid-template-columns:1fr!important}
+  .cust-list-col{display:none}
+  .cust-list-col.mobile-show{display:block}
+
+  /* search bar */
+  .sbr{flex-direction:column!important;gap:8px!important}
+  .sbr input,.sbr select{width:100%!important;min-width:unset!important;font-size:16px!important}
+
+  /* cards grid — single column */
+  .cg{grid-template-columns:1fr!important}
+
+  /* insights grids → stack */
+  #insights-wrap [style*="grid-template-columns:1fr 1fr"],
+  #insights-wrap [style*="grid-template-columns:repeat(4"]{
+    grid-template-columns:1fr!important;
+  }
+  #insights-wrap [style*="grid-template-columns:repeat(3"]{
+    grid-template-columns:1fr 1fr!important;
+  }
+
+  /* internal tracker cards — single column */
+  #int-body{grid-template-columns:1fr!important}
+
+  /* forms */
+  .pline{grid-template-columns:1fr 1fr!important}
+  input,select,textarea{font-size:16px!important} /* prevent iOS zoom */
+
+  /* buttons — bigger tap targets */
+  .btn{min-height:40px;padding:8px 14px}
+  .btn-sm{min-height:36px}
+
+  /* amend panel */
+  .amend-panel{margin:0!important;border-radius:0!important}
+
+  /* delivery board → list only */
+  .dv-cols{min-width:unset!important}
+
+  /* lock screen */
+  .lock-box{padding:28px 20px}
+
+  /* toast — bottom center */
+  .toast{right:50%;transform:translateX(50%);bottom:16px;font-size:12px}
+
+  /* GD section hide labels */
+  #gd-status-txt{display:none}
+}
 @media print{
   .topbar,.tabs,.sbr,.sec-label,button,.back-btn,.mg,.cg,
   #sec-receipt,#sec-internal,#sec-stock,#sec-customers,#sec-reports,
@@ -267,7 +347,9 @@ textarea{resize:vertical;min-height:60px}
     <div class="topbar-title">Order Manager</div>
     <div class="topbar-sub">Grocery resale tracker &mdash; AUD</div>
   </div>
-  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+  <!-- hamburger — only shown on mobile -->
+  <button id="topbar-menu-btn" onclick="toggleTopbarMenu()" style="display:none;background:none;border:1px solid #e5e5e5;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:18px;line-height:1">&#9776;</button>
+  <div id="topbar-actions" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <span style="font-size:12px;color:#888" id="save-status"><span class="save-dot"></span>Data saved locally</span>
 
     <!-- ── Google Drive section ── -->
@@ -768,7 +850,22 @@ function show(tab){
   if(tab==='summary') renderSummary();
   if(tab==='delivery'){renderRunSelector();renderDelivery();}
   if(tab==='insights') renderInsights();
+  /* close mobile menu on tab change */
+  var menu=document.getElementById('topbar-actions');
+  if(menu) menu.classList.remove('open');
 }
+
+function toggleTopbarMenu(){
+  var el=document.getElementById('topbar-actions');
+  el.classList.toggle('open');
+}
+document.addEventListener('click',function(e){
+  var menu=document.getElementById('topbar-actions');
+  var btn=document.getElementById('topbar-menu-btn');
+  if(menu&&btn&&!menu.contains(e.target)&&!btn.contains(e.target)){
+    menu.classList.remove('open');
+  }
+});
 
 /* ── TAB 1: RECEIPT DASHBOARD ── */
 var dashFilter='all';
@@ -933,6 +1030,71 @@ function renderDash(){
 
   if(!html) html='<tr><td colspan="8"><div class="empty">No customers match.</div></td></tr>';
   document.getElementById('dash-tbody').innerHTML=html;
+
+  /* ── Mobile card view — replaces the table on small screens ── */
+  var isMobile=window.innerWidth<=768;
+  var tableWrap=document.querySelector('#sec-receipt .card');
+  var mobileList=document.getElementById('dash-mobile-list');
+
+  if(isMobile){
+    if(tableWrap) tableWrap.style.display='none';
+    if(!mobileList){
+      mobileList=document.createElement('div');
+      mobileList.id='dash-mobile-list';
+      document.getElementById('dash-view').appendChild(mobileList);
+    }
+    mobileList.style.display='block';
+    var mhtml='';
+    list.forEach(function(row){
+      var c=row.c,due=row.due,tot=row.tot;
+      var accent=row.status==='unpaid'?'#E24B4A':row.status==='partial'?'#EF9F27':'#639922';
+      var statusLabel=row.status==='unpaid'?'Owes '+rm(due):row.status==='partial'?'Partial':'Paid';
+      var statusBg=row.status==='unpaid'?'#FCEBEB':row.status==='partial'?'#FAEEDA':'#EAF3DE';
+      var statusColor=row.status==='unpaid'?'#791F1F':row.status==='partial'?'#633806':'#27500A';
+      mhtml+=
+        '<div style="background:#fff;border-radius:12px;border:1px solid #e5e5e5;border-left:3px solid '+accent+';margin-bottom:10px;overflow:hidden">'+
+          '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 10px">'+
+            '<div style="display:flex;align-items:center;gap:10px">'+
+              '<div style="width:36px;height:36px;border-radius:50%;background:#E6F1FB;color:#0C447C;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+ini(c.name)+'</div>'+
+              '<div>'+
+                '<div style="font-weight:600;font-size:14px">'+esc(c.name)+'</div>'+
+                '<div style="font-size:11px;color:#aaa">'+(c.phone||row.ords.length+' orders')+'</div>'+
+              '</div>'+
+            '</div>'+
+            '<span style="background:'+statusBg+';color:'+statusColor+';font-size:11px;font-weight:600;padding:4px 10px;border-radius:99px">'+statusLabel+'</span>'+
+          '</div>'+
+          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-top:1px solid #f5f5f5">'+
+            '<div style="padding:10px 14px;border-right:1px solid #f5f5f5">'+
+              '<div style="font-size:10px;color:#aaa;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">Orders</div>'+
+              '<div style="font-size:15px;font-weight:600">'+row.ords.length+'</div>'+
+            '</div>'+
+            '<div style="padding:10px 14px;border-right:1px solid #f5f5f5">'+
+              '<div style="font-size:10px;color:#aaa;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">Total</div>'+
+              '<div style="font-size:15px;font-weight:600">'+rm(tot)+'</div>'+
+            '</div>'+
+            '<div style="padding:10px 14px">'+
+              '<div style="font-size:10px;color:#aaa;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">Owes</div>'+
+              '<div style="font-size:15px;font-weight:600;color:'+(due>0?'#A32D2D':'#888')+'">'+(due>0?rm(due):'—')+'</div>'+
+            '</div>'+
+          '</div>'+
+          (due>0?
+            '<div style="padding:10px 14px;border-top:1px solid #f5f5f5;display:flex;gap:8px">'+
+              '<button onclick="markCustPaid('+c.id+')" style="flex:1;padding:10px;font-size:13px;font-weight:600;border:none;border-radius:8px;background:#EAF3DE;color:#27500A;cursor:pointer">✓ Mark paid</button>'+
+              '<button onclick="openDet('+c.id+')" style="flex:1;padding:10px;font-size:13px;font-weight:500;border:1px solid #e5e5e5;border-radius:8px;background:#fff;color:#555;cursor:pointer">View receipt</button>'+
+            '</div>'
+          :
+            '<div style="padding:10px 14px;border-top:1px solid #f5f5f5">'+
+              '<button onclick="openDet('+c.id+')" style="width:100%;padding:10px;font-size:13px;font-weight:500;border:1px solid #e5e5e5;border-radius:8px;background:#fff;color:#555;cursor:pointer">View orders</button>'+
+            '</div>'
+          )+
+        '</div>';
+    });
+    if(!mhtml) mhtml='<div class="empty" style="padding:30px;text-align:center;color:#aaa">No customers match.</div>';
+    mobileList.innerHTML=mhtml;
+  } else {
+    if(tableWrap) tableWrap.style.display='';
+    if(mobileList) mobileList.style.display='none';
+  }
 }
 
 function markCustPaid(cid){
@@ -2717,6 +2879,8 @@ function toggleDvRow(cid){
 }
 
 function renderDelivery(){
+  /* auto-switch to list view on mobile */
+  if(window.innerWidth<=768 && dvView==='board') dvView='list';
   var rid=parseInt(document.getElementById('dv-run-sel').value);
   var content=document.getElementById('dv-content');
   content.style.display=dvView==='list'?'block':'none';
@@ -3659,6 +3823,19 @@ function copyPlannerText(){
   var text=el.innerText||el.textContent;
   navigator.clipboard.writeText(text).then(function(){toast('Copied ✓');}).catch(function(){var ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('Copied ✓');});
 }
+
+/* ── Resize: re-render active tab for mobile/desktop switch ── */
+var resizeTimer;
+window.addEventListener('resize',function(){
+  clearTimeout(resizeTimer);
+  resizeTimer=setTimeout(function(){
+    var active=document.querySelector('.tab.active');
+    if(!active) return;
+    var tab=['receipt','internal','stock','customers','reports','summary','delivery','insights'][Array.from(document.querySelectorAll('.tab')).indexOf(active)];
+    if(tab==='receipt') renderDash();
+    if(tab==='delivery') renderDelivery();
+  },200);
+});
 
 /* boot */
 lkInit();
