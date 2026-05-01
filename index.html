@@ -7,6 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <title>Order Manager</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -3377,8 +3378,20 @@ window.gisLoaded=function(){ gdInitGis(); };
 })();
 
 /* ════════════════════════════════════════
-   PASSWORD + AUTO-LOCK
+   PASSWORD — SHARED HARDCODED + EMAIL NOTIFY
+   ════════════════════════════════════════
+
+   To change the password:
+   1. Run lkHash('yournewpassword') in browser console
+   2. Replace LK_HASH below with the result
    ════════════════════════════════════════ */
+var LK_HASH='onlhj1r667a'; /* hash of NMC123456! */
+
+/* EmailJS config — fill in after EmailJS setup */
+var EMAILJS_PUBLIC_KEY='';     /* your EmailJS public key */
+var EMAILJS_SERVICE_ID='';     /* e.g. 'service_xxxxxxx' */
+var EMAILJS_TEMPLATE_ID='';   /* e.g. 'template_xxxxxxx' */
+
 function lkHash(s){
   var h1=0xdeadbeef,h2=0x41c6ce57;
   for(var i=0;i<s.length;i++){var ch=s.charCodeAt(i);h1=Math.imul(h1^ch,2654435761);h2=Math.imul(h2^ch,1597334677);}
@@ -3386,85 +3399,119 @@ function lkHash(s){
   h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);
   return(4294967296*(2097151&h2)+(h1>>>0)).toString(36)+s.length.toString(36);
 }
-var LK={IDLE_MS:15*60*1000,mode:'',idleTimer:null,barStart:0,barTick:null};
-function lkIsSetup(){return!!localStorage.getItem('om_pw');}
+
+var LK={IDLE_MS:15*60*1000,idleTimer:null,barStart:0,barTick:null};
+
 function lkInit(){
-  var scr=document.getElementById('lock-screen');
-  scr.style.display='flex';
+  document.getElementById('lock-screen').style.display='flex';
   document.getElementById('app-wrap').style.display='none';
-  if(!lkIsSetup()){
-    LK.mode='setup';
-    document.getElementById('lk-icon').textContent='🛡️';
-    document.getElementById('lk-title').textContent='Create a password';
-    document.getElementById('lk-sub').textContent='Choose a password to protect your Order Manager.';
-    document.getElementById('lk-input').placeholder='Choose a password (min 4 chars)';
-    document.getElementById('lk-btn').textContent='Set password & enter';
-    document.getElementById('lk-hint').textContent="Don't forget it — no recovery without data reset.";
-  } else {
-    LK.mode='unlock';
-    document.getElementById('lk-icon').textContent='🔒';
-    document.getElementById('lk-title').textContent='Order Manager';
-    document.getElementById('lk-sub').textContent='Enter your password to continue';
-    document.getElementById('lk-input').placeholder='••••••••';
-    document.getElementById('lk-btn').textContent='Unlock';
-    document.getElementById('lk-hint').innerHTML='<a onclick="lkForgot()">Forgot password? (resets all data)</a>';
-  }
-  setTimeout(function(){var inp=document.getElementById('lk-input');inp.value='';inp.classList.remove('shake');inp.focus();document.getElementById('lk-err').textContent='';},80);
+  document.getElementById('lk-icon').textContent='🔒';
+  document.getElementById('lk-title').textContent='Order Manager';
+  document.getElementById('lk-sub').textContent='Enter the password to continue';
+  document.getElementById('lk-input').placeholder='••••••••';
+  document.getElementById('lk-btn').textContent='Unlock';
+  document.getElementById('lk-hint').textContent='Contact Simon if you need access.';
+  setTimeout(function(){
+    var inp=document.getElementById('lk-input');
+    inp.value='';inp.classList.remove('shake');inp.focus();
+    document.getElementById('lk-err').textContent='';
+  },80);
 }
+
 function lkSubmit(){
-  var inp=document.getElementById('lk-input');var val=inp.value;var err=document.getElementById('lk-err');
-  if(LK.mode==='setup'){
-    if(val.length<4){err.textContent='Please use at least 4 characters.';inp.classList.add('shake');return;}
-    localStorage.setItem('om_pw',lkHash(val));lkUnlock();
+  var inp=document.getElementById('lk-input');
+  var val=inp.value;
+  var err=document.getElementById('lk-err');
+  if(lkHash(val)===LK_HASH){
+    lkUnlock(val);
   } else {
-    if(lkHash(val)===localStorage.getItem('om_pw')){lkUnlock();}
-    else{err.textContent='Incorrect password — try again.';inp.value='';inp.classList.add('shake');inp.focus();}
+    err.textContent='Incorrect password — try again.';
+    inp.value='';inp.classList.add('shake');inp.focus();
+    /* notify on failed attempt too */
+    lkNotify('FAILED login attempt', val.length+' chars entered');
   }
 }
-function lkUnlock(){
+
+function lkUnlock(pw){
   document.getElementById('lock-screen').style.display='none';
   document.getElementById('app-wrap').style.display='block';
   document.getElementById('lk-err').textContent='';
   lkResetIdle();
+  /* send login notification */
+  lkNotify('Successful login', navigator.userAgent);
 }
+
 function lkLock(){
   clearTimeout(LK.idleTimer);clearTimeout(LK.barTick);
   document.getElementById('lock-idle-bar').style.width='100%';
   lkInit();
 }
+
 function lkResetIdle(){
   clearTimeout(LK.idleTimer);clearTimeout(LK.barTick);
   LK.barStart=Date.now();
-  function tickBar(){var pct=Math.max(0,100-(Date.now()-LK.barStart)/LK.IDLE_MS*100);var bar=document.getElementById('lock-idle-bar');if(bar)bar.style.width=pct+'%';if(pct>0)LK.barTick=setTimeout(tickBar,3000);}
+  function tickBar(){
+    var pct=Math.max(0,100-(Date.now()-LK.barStart)/LK.IDLE_MS*100);
+    var bar=document.getElementById('lock-idle-bar');
+    if(bar)bar.style.width=pct+'%';
+    if(pct>0)LK.barTick=setTimeout(tickBar,3000);
+  }
   tickBar();
   LK.idleTimer=setTimeout(function(){toast('Locked due to inactivity.');lkLock();},LK.IDLE_MS);
-  ['click','keydown','mousemove','touchstart','scroll'].forEach(function(e){document.removeEventListener(e,lkActivity,true);document.addEventListener(e,lkActivity,true);});
+  ['click','keydown','mousemove','touchstart','scroll'].forEach(function(e){
+    document.removeEventListener(e,lkActivity,true);
+    document.addEventListener(e,lkActivity,true);
+  });
 }
 function lkActivity(){lkResetIdle();}
-function lkForgot(){
-  if(!confirm('Reset password?\n\nWARNING: This permanently deletes ALL your data.\n\nOnly proceed if you have a backup.'))return;
-  if(!confirm('Last chance — are you sure?'))return;
-  localStorage.clear();location.reload();
+
+function lkNotify(event, detail){
+  if(!EMAILJS_PUBLIC_KEY||!EMAILJS_SERVICE_ID||!EMAILJS_TEMPLATE_ID) return;
+  try{
+    emailjs.init(EMAILJS_PUBLIC_KEY);
+    emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      event_type: event,
+      event_time: new Date().toLocaleString('en-AU',{timeZone:'Australia/Sydney'}),
+      device_info: detail,
+      page_url: location.href
+    });
+  }catch(e){console.log('EmailJS error:',e);}
 }
+
+/* change password — updates LK_HASH in memory only (resets on reload)
+   To make permanent: update LK_HASH in the code and re-upload to GitHub */
 function lkChangePw(){
   if(document.getElementById('chpw-ov'))return;
   var ov=document.createElement('div');ov.className='chpw-overlay';ov.id='chpw-ov';
   ov.innerHTML='<div class="chpw-box"><h2>🔑 Change Password</h2>'+
+    '<p style="font-size:12px;color:#888;margin-bottom:12px;line-height:1.6">'+
+    'Enter the new password below. Then copy the hash shown and update the code on GitHub to make it permanent.</p>'+
     '<label>Current password</label><input type="password" id="cp-cur" onkeydown="if(event.key===\'Enter\')lkSavePw()">'+
     '<label>New password</label><input type="password" id="cp-new" placeholder="Min 4 characters" onkeydown="if(event.key===\'Enter\')lkSavePw()">'+
     '<label>Confirm new password</label><input type="password" id="cp-con" onkeydown="if(event.key===\'Enter\')lkSavePw()">'+
     '<div class="chpw-err" id="cp-err"></div>'+
+    '<div id="cp-hash-out" style="display:none;margin-top:10px;padding:10px;background:#f0f4ff;border-radius:8px;font-size:12px">'+
+      '<strong>New hash (copy this into the code):</strong><br><code id="cp-hash-val" style="word-break:break-all;color:#1e3a5f"></code>'+
+    '</div>'+
     '<div class="chpw-btns"><button class="btn btn-o" onclick="document.getElementById(\'chpw-ov\').remove()">Cancel</button>'+
     '<button class="btn btn-p" onclick="lkSavePw()">Update</button></div></div>';
   document.body.appendChild(ov);
   setTimeout(function(){document.getElementById('cp-cur').focus();},60);
 }
 function lkSavePw(){
-  var cur=document.getElementById('cp-cur').value;var nw=document.getElementById('cp-new').value;var con=document.getElementById('cp-con').value;var err=document.getElementById('cp-err');
-  if(lkHash(cur)!==localStorage.getItem('om_pw')){err.textContent='Current password incorrect.';return;}
+  var cur=document.getElementById('cp-cur').value;
+  var nw=document.getElementById('cp-new').value;
+  var con=document.getElementById('cp-con').value;
+  var err=document.getElementById('cp-err');
+  if(lkHash(cur)!==LK_HASH){err.textContent='Current password incorrect.';return;}
   if(nw.length<4){err.textContent='New password must be at least 4 characters.';return;}
   if(nw!==con){err.textContent='Passwords do not match.';return;}
-  localStorage.setItem('om_pw',lkHash(nw));document.getElementById('chpw-ov').remove();toast('Password updated ✓');
+  var newHash=lkHash(nw);
+  LK_HASH=newHash; /* update in memory */
+  document.getElementById('cp-hash-val').textContent=newHash;
+  document.getElementById('cp-hash-out').style.display='block';
+  err.style.color='#16a34a';
+  err.textContent='✓ Password updated for this session. Copy the hash above and update the code on GitHub to make it permanent.';
 }
 
 /* ════════════════════════════════════════
