@@ -2923,7 +2923,6 @@ function sumTogglePaid(cid,date){
 
 function exportSummarySheets(){
   if(!GD.accessToken){toast('Connect Google Drive first.');return;}
-  if(typeof XLSX==='undefined'){toast('Loading library...');return;}
   var ords=getSummaryOrders();
   if(!ords.length){toast('No orders to export.');return;}
   toast('Creating Google Sheet...');
@@ -2937,27 +2936,28 @@ function exportSummarySheets(){
     });
   });
   var merged=Object.values(mergedMap).sort(function(a,b){var na=(cp(a.cid)||{name:''}).name;var nb=(cp(b.cid)||{name:''}).name;return na.localeCompare(nb)||a.date.localeCompare(b.date);});
-  var rows=[['Order by','Product','Unit price (A$)','Qty','Subtotal (A$)','Order date','Status']];
-  var headerRowIdxs=[0];var totalRowIdxs=[];var grandTotal=0;
+  /* ONE header row only */
+  var rows=[['Order by','Product','Unit price (A$)','Qty','Subtotal (A$)','Order date','Status','Collected']];
+  var totalRowIdxs=[];var paidItemRows=[];var grandTotal=0;
   merged.forEach(function(m,bi){
     var c=cp(m.cid);var cname=c?c.name:'Unknown';var blockTotal=0;
-    headerRowIdxs.push(rows.length);
-    rows.push(['Order by','Product','Unit price (A$)','Qty','Subtotal (A$)','Order date','Status']);
+    var isPaid=m.status==='paid';
     m.items.forEach(function(it){
       var p=sp(it.s);if(!p)return;
       var sell=parseFloat((it.sp!=null?it.sp:p.sell).toFixed(2));
       var qty=parseFloat(it.q.toFixed(2));
       var sub=parseFloat((sell*qty).toFixed(2));
       blockTotal+=sub;
-      rows.push([cname,p.name,sell,qty,sub,m.date,m.status]);
+      if(isPaid)paidItemRows.push(rows.length);
+      rows.push([cname,p.name,sell,qty,sub,m.date,m.status,isPaid?'Yes':'']);
     });
     grandTotal=parseFloat((grandTotal+blockTotal).toFixed(2));
-    totalRowIdxs.push(rows.length);
-    rows.push([cname+' Total','','','',parseFloat(blockTotal.toFixed(2)),'','']);
-    if(bi<merged.length-1)rows.push(['','','','','','','']);
+    totalRowIdxs.push({ri:rows.length,paid:isPaid,total:parseFloat(blockTotal.toFixed(2))});
+    rows.push([cname+' Total','','','',parseFloat(blockTotal.toFixed(2)),'','',isPaid?'Paid':'Unpaid']);
+    if(bi<merged.length-1)rows.push(['','','','','','','','']);
   });
-  rows.push(['','','','','','','']);
-  rows.push(['GRAND TOTAL','','','',grandTotal,'','']);
+  rows.push(['','','','','','','','']);
+  rows.push(['GRAND TOTAL','','','',grandTotal,'','','']);
   var grandIdx=rows.length-1;
   var today=new Date().toISOString().split('T')[0];
   fetch('https://sheets.googleapis.com/v4/spreadsheets',{
@@ -2966,37 +2966,56 @@ function exportSummarySheets(){
     body:JSON.stringify({properties:{title:'Order Summary '+today},sheets:[{properties:{title:'Order Summary'}}]})
   }).then(function(r){return r.json();}).then(function(sheet){
     if(sheet.error){toast('Sheets error: '+sheet.error.message);return;}
-    var sid=sheet.spreadsheetId;
-    var shid=sheet.sheets[0].properties.sheetId;
-    return fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/A1:G'+rows.length+'?valueInputOption=USER_ENTERED',{
+    var sid=sheet.spreadsheetId;var shid=sheet.sheets[0].properties.sheetId;
+    return fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/A1:H'+rows.length+'?valueInputOption=USER_ENTERED',{
       method:'PUT',headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':'application/json'},
       body:JSON.stringify({values:rows})
     }).then(function(){
       var reqs=[];
-      /* bold blue headers */
-      headerRowIdxs.forEach(function(ri){
-        reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:ri,endRowIndex:ri+1,startColumnIndex:0,endColumnIndex:7},
-          cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.85,green:0.89,blue:0.95}}},fields:'userEnteredFormat(textFormat,backgroundColor)'}});
+      /* bold blue header */
+      reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:0,endRowIndex:1,startColumnIndex:0,endColumnIndex:8},
+        cell:{userEnteredFormat:{textFormat:{bold:true,fontSize:11},backgroundColor:{red:0.85,green:0.89,blue:0.95},horizontalAlignment:'CENTER'}},
+        fields:'userEnteredFormat(textFormat,backgroundColor,horizontalAlignment)'}});
+      /* 2dp number format for columns C,D,E (index 2,3,4) */
+      rows.forEach(function(row,ri){
+        if(ri===0)return;
+        [2,3,4].forEach(function(ci){
+          if(typeof row[ci]==='number'){
+            reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:ri,endRowIndex:ri+1,startColumnIndex:ci,endColumnIndex:ci+1},
+              cell:{userEnteredFormat:{numberFormat:{type:'NUMBER',pattern:'0.00'}}},fields:'userEnteredFormat.numberFormat'}});
+          }
+        });
       });
-      /* bold green totals */
-      totalRowIdxs.forEach(function(ri){
-        reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:ri,endRowIndex:ri+1,startColumnIndex:0,endColumnIndex:7},
-          cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.77,green:0.94,blue:0.80}}},fields:'userEnteredFormat(textFormat,backgroundColor)'}});
+      /* light green for paid item rows */
+      paidItemRows.forEach(function(ri){
+        reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:ri,endRowIndex:ri+1,startColumnIndex:0,endColumnIndex:8},
+          cell:{userEnteredFormat:{backgroundColor:{red:0.90,green:0.97,blue:0.90}}},fields:'userEnteredFormat.backgroundColor'}});
       });
-      /* bold white grand total */
-      reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:grandIdx,endRowIndex:grandIdx+1,startColumnIndex:0,endColumnIndex:7},
-        cell:{userEnteredFormat:{textFormat:{bold:true,foregroundColor:{red:1,green:1,blue:1}},backgroundColor:{red:0.12,green:0.23,blue:0.37}}},fields:'userEnteredFormat(textFormat,backgroundColor)'}});
+      /* customer total rows */
+      totalRowIdxs.forEach(function(t){
+        var bg=t.paid?{red:0.20,green:0.66,blue:0.33}:{red:0.87,green:0.95,blue:0.80};
+        var fc=t.paid?{red:1,green:1,blue:1}:{red:0.1,green:0.3,blue:0.1};
+        reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:t.ri,endRowIndex:t.ri+1,startColumnIndex:0,endColumnIndex:8},
+          cell:{userEnteredFormat:{textFormat:{bold:true,fontSize:11,foregroundColor:fc},backgroundColor:bg}},
+          fields:'userEnteredFormat(textFormat,backgroundColor)'}});
+      });
+      /* grand total */
+      reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:grandIdx,endRowIndex:grandIdx+1,startColumnIndex:0,endColumnIndex:8},
+        cell:{userEnteredFormat:{textFormat:{bold:true,fontSize:12,foregroundColor:{red:1,green:1,blue:1}},backgroundColor:{red:0.12,green:0.23,blue:0.37}}},
+        fields:'userEnteredFormat(textFormat,backgroundColor)'}});
+      /* freeze header */
+      reqs.push({updateSheetProperties:{properties:{sheetId:shid,gridProperties:{frozenRowCount:1}},fields:'gridProperties.frozenRowCount'}});
       /* auto resize */
-      reqs.push({autoResizeDimensions:{dimensions:{sheetId:shid,dimension:'COLUMNS',startIndex:0,endIndex:7}}});
+      reqs.push({autoResizeDimensions:{dimensions:{sheetId:shid,dimension:'COLUMNS',startIndex:0,endIndex:8}}});
       return fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sid+':batchUpdate',{
         method:'POST',headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':'application/json'},
         body:JSON.stringify({requests:reqs})
       });
     }).then(function(){
-      toast('✓ Saved to Google Sheets');
+      toast('\u2713 Saved to Google Sheets');
       window.open('https://docs.google.com/spreadsheets/d/'+sid,'_blank');
     });
-  }).catch(function(err){toast('Error: '+err.message);});
+  }).catch(function(err){toast('Sheets error: '+err.message);});
 }
 
 
