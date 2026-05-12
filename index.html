@@ -1399,11 +1399,14 @@ function delOrd(id){
   D.orders=D.orders.filter(function(o){return o.id!==id});
   saveData();renderInt();renderIntM();if(selCust)showProfile(selCust);
 }
-function popCust(){document.getElementById('o-cust').innerHTML='<option value="">Select...</option>'+D.customers.map(function(c){return'<option value="'+c.id+'">'+esc(c.name)+'</option>'}).join('')}
+function popCust(){
+  var sorted=D.customers.slice().sort(function(a,b){return a.name.localeCompare(b.name);});
+  document.getElementById('o-cust').innerHTML='<option value="">Select...</option>'+sorted.map(function(c){return'<option value="'+c.id+'">'+esc(c.name)+'</option>'}).join('');
+}
 function initOForm(){oLines=[{s:'',q:1}];document.getElementById('o-date').value=new Date().toISOString().split('T')[0];renderOL();document.getElementById('o-msg').textContent=''}
 function addLine(){oLines.push({s:'',q:1});renderOL()}
 function remLine(i){oLines.splice(i,1);renderOL()}
-function updLine(i,f,v){oLines[i][f]=f==='q'?Math.max(1,parseInt(v)||1):parseInt(v);renderOL()}
+function updLine(i,f,v){oLines[i][f]=f==='q'?Math.max(0.01,parseFloat(v)||0.01):parseInt(v);renderOL()}
 function renderOL(){
   document.getElementById('o-lines').innerHTML=oLines.map(function(l,i){
     var sub=l.s?rm(sp(parseInt(l.s)).sell*l.q):'—';
@@ -1411,7 +1414,7 @@ function renderOL(){
       '<div><label>Item</label><select onchange="updLine('+i+',\'s\',this.value)"><option value="">Select...</option>'+
         D.stock.map(function(p){return'<option value="'+p.id+'"'+(l.s==p.id?' selected':'')+'>'+esc(p.name)+' — '+rm(p.sell)+'</option>'}).join('')+
       '</select></div>'+
-      '<div><label>Qty</label><input type="number" min="1" value="'+l.q+'" onchange="updLine('+i+',\'q\',this.value)"></div>'+
+      '<div><label>Qty</label><input type="number" min="0.01" step="0.01" value="'+l.q+'" onchange="updLine('+i+',\'q\',this.value)"></div>'+
       '<div><label>Subtotal</label><input readonly value="'+sub+'"></div>'+
       (oLines.length>1?'<div style="display:flex;align-items:flex-end"><button class="btn btn-sm btn-d" onclick="remLine('+i+')" style="height:36px">&#10005;</button></div>':'<div></div>')+
     '</div>';
@@ -1468,7 +1471,7 @@ function openAmend(id){
       '<div class="r3" style="margin-bottom:14px">'+
         '<div><label>Customer</label>'+
           '<select id="a-cust">'+
-            D.customers.map(function(c2){return'<option value="'+c2.id+'"'+(c2.id===o.cid?' selected':'')+'>'+esc(c2.name)+'</option>'}).join('')+
+            D.customers.slice().sort(function(a,b){return a.name.localeCompare(b.name);}).map(function(c2){return'<option value="'+c2.id+'"'+(c2.id===o.cid?' selected':'')+'>'+esc(c2.name)+'</option>'}).join('')+
           '</select>'+
         '</div>'+
         '<div><label>Date</label><input type="date" id="a-date" value="'+o.date+'"></div>'+
@@ -1967,21 +1970,59 @@ function fuzzyMatchCust(name){
       .replace(/[\u2060\u200B\u200C\u200D\uFEFF\u00A0\s]+/g,'')
       .replace(/[,，。\.、！!？?\*\(\)（）\-－_]/g,'');
   }
+  function normWords(s){
+    return s.toLowerCase()
+      .replace(/[\u2060\u200B\u200C\u200D\uFEFF\u00A0]/g,'')
+      .trim()
+      .replace(/[,，。\.、！!？?\*\(\)（）\-－_]/g,'')
+      .split(/[\s　]+/)
+      .filter(function(t){return t.length>0;});
+  }
+
   var n=norm(name);
-  /* 1. exact normalised match */
-  var m=D.customers.find(function(c){return norm(c.name)===n});
+
+  /* 1. exact normalised match (strips all spaces/punct) */
+  var m=D.customers.find(function(c){return norm(c.name)===n;});
   if(m) return m;
-  /* 2. first meaningful token (e.g. "Ceci" matches "Ceci Wong") */
-  var first=name.toLowerCase()
-    .replace(/[\u2060\u200B\u200C\u200D\uFEFF\u00A0]/g,'')
-    .split(/[\s　]+/)[0]
-    .replace(/[^a-z\u4e00-\u9fff]/g,'');
-  if(first.length<2) return null;
-  m=D.customers.find(function(c){
-    var cn=norm(c.name).replace(/[^a-z\u4e00-\u9fff]/g,'');
-    return cn===first||cn.startsWith(first)||first.startsWith(cn);
+
+  var inWords=normWords(name);   /* e.g. ['mandy','f'] or ['angel'] */
+  if(!inWords.length) return null;
+  var inFirst=inWords[0];        /* first word of input */
+  var inRest=inWords.slice(1);   /* remaining words of input e.g. ['f'] or ['ho'] */
+
+  /* collect all candidates */
+  var candidates=D.customers.filter(function(c){
+    var cWords=normWords(c.name);
+    var cFirst=cWords[0]||'';
+    var cRest=cWords.slice(1);
+
+    /* first word must match exactly */
+    if(cFirst!==inFirst) return false;
+
+    /* if input has no surname — only match if customer also has no surname,
+       OR there's only ONE customer with that first name */
+    if(inRest.length===0) return true;
+
+    /* if input has surname words, check each one */
+    return inRest.every(function(inW){
+      return cRest.some(function(cW){
+        /* exact surname word match OR abbreviated (e.g. 'f' matches 'fung') */
+        return cW===inW || (inW.length===1 && cW.startsWith(inW));
+      });
+    });
   });
-  return m||null;
+
+  /* if ambiguous (multiple candidates with same first name and no surname given),
+     pick only if there is exactly ONE match */
+  if(candidates.length===1) return candidates[0];
+
+  /* if multiple candidates and no surname to disambiguate, return null */
+  if(candidates.length>1 && inRest.length===0) return null;
+
+  /* if multiple candidates even with surname info, return null */
+  if(candidates.length>1) return null;
+
+  return null;
 }
 
 function fuzzyMatchStock(label){
@@ -2214,7 +2255,7 @@ function renderCustList(){
   var q=(document.getElementById('cl-search').value||'').toLowerCase();
   var list=D.customers.filter(function(c){
     return !q||c.name.toLowerCase().indexOf(q)>=0||(c.phone&&c.phone.indexOf(q)>=0);
-  });
+  }).slice().sort(function(a,b){return a.name.localeCompare(b.name);});
   var el=document.getElementById('cust-list');
   if(!list.length){el.innerHTML='<div class="empty">No customers found.</div>';return}
   el.innerHTML=list.map(function(c){
@@ -3783,6 +3824,133 @@ function renderInsights(){
         iLoyalty('🏆 Champions','5+ orders',highVal,'#16a34a','#f0fdf4')+iLoyalty('🔄 Regulars','2–4 orders',repeat,'#1d4ed8','#eff6ff')+iLoyalty('👀 One-timers','1 order only',oneTime,'#d97706','#fffbeb')+
       '</div></div>';
     })()+
+
+    /* ── Profit Focus ── */
+    (function(){
+      /* build product stats */
+      var ps={};
+      D.orders.forEach(function(o){
+        o.items.forEach(function(i){
+          var p=sp(i.s);if(!p)return;
+          if(!ps[i.s])ps[i.s]={name:p.name,cost:p.cost,sell:p.sell,profit:0,rev:0,qty:0,orders:0,buyers:{}};
+          ps[i.s].profit+=(i.sp-i.cp)*i.q;
+          ps[i.s].rev+=i.sp*i.q;
+          ps[i.s].qty+=i.q;
+          ps[i.s].orders++;
+          ps[i.s].buyers[o.cid]=1;
+        });
+      });
+      var totalCusts=D.customers.length||1;
+      var allProds=Object.values(ps);
+
+      /* categorise each product */
+      var heroes=[];   /* high margin ≥30% AND low penetration <50% — push harder */
+      var stars=[];    /* high margin ≥30% AND high penetration ≥50% — protect */
+      var workhorses=[];/* low margin <15% AND high penetration ≥40% — volume drivers */
+      var reconsider=[];/* low margin <15% AND low penetration <20% — consider dropping */
+
+      allProds.forEach(function(p){
+        if(!p.rev) return;
+        var margin=p.profit/p.rev*100;
+        var pen=Object.keys(p.buyers).length/totalCusts*100;
+        var row={name:p.name,margin:margin,pen:pen,profit:p.profit,rev:p.rev,orders:p.orders,buyers:Object.keys(p.buyers).length};
+        if(margin>=30&&pen<50) heroes.push(row);
+        else if(margin>=30&&pen>=50) stars.push(row);
+        else if(margin<15&&pen>=40) workhorses.push(row);
+        else if(margin<15&&pen<20&&p.orders>=2) reconsider.push(row);
+      });
+
+      heroes.sort(function(a,b){return b.profit-a.profit;});
+      stars.sort(function(a,b){return b.profit-a.profit;});
+      workhorses.sort(function(a,b){return b.rev-a.rev;});
+      reconsider.sort(function(a,b){return a.margin-b.margin;});
+
+      function prodRow(p,accent,showPen){
+        var barW=Math.min(100,Math.round(p.pen));
+        var barCol=p.margin>=50?'#639922':p.margin>=30?'#97C459':p.margin>=15?'#EF9F27':'#E24B4A';
+        return'<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #f5f5f5">'+
+          '<div style="flex:1;min-width:0">'+
+            '<div style="font-size:13px;font-weight:600;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(p.name)+'</div>'+
+            (showPen?'<div style="display:flex;align-items:center;gap:6px;margin-top:4px">'+
+              '<div style="flex:1;height:5px;background:#f0f0f0;border-radius:99px;max-width:120px;overflow:hidden">'+
+                '<div style="width:'+barW+'%;height:100%;background:'+barCol+';border-radius:99px"></div>'+
+              '</div>'+
+              '<span style="font-size:10px;color:#aaa">'+Math.round(p.pen)+'% of customers</span>'+
+            '</div>':'<div style="font-size:11px;color:#aaa;margin-top:2px">'+p.buyers+' buyers · '+p.orders+' orders</div>')+
+          '</div>'+
+          '<div style="text-align:right;flex-shrink:0">'+
+            '<div style="font-size:13px;font-weight:700;color:'+accent+'">'+Math.round(p.margin)+'%</div>'+
+            '<div style="font-size:10px;color:#aaa">A$'+Math.round(p.profit)+' profit</div>'+
+          '</div>'+
+        '</div>';
+      }
+
+      var avgMargin=allProds.reduce(function(s,p){return s+(p.rev>0?p.profit/p.rev*100:0);},0)/(allProds.length||1);
+
+      return'<div class="card" style="margin-bottom:24px;border:1.5px solid #e0e7ff">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">'+
+          '<div>'+
+            '<div style="font-size:15px;font-weight:700;color:#1e3a5f">💡 Profit focus</div>'+
+            '<div style="font-size:12px;color:#888;margin-top:2px">Live product strategy — based on your actual margins and customer penetration</div>'+
+          '</div>'+
+          '<span style="font-size:12px;font-weight:600;background:#f0f4ff;color:#1e3a5f;padding:5px 12px;border-radius:99px">Portfolio avg margin: '+Math.round(avgMargin)+'%</span>'+
+        '</div>'+
+
+        /* heroes */
+        (heroes.length?
+          '<div style="background:#f0fdf4;border-radius:10px;padding:14px;margin-bottom:12px">'+
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'+
+              '<span style="font-size:16px">🚀</span>'+
+              '<div>'+
+                '<div style="font-size:13px;font-weight:700;color:#166534">Push harder — high margin, underexposed</div>'+
+                '<div style="font-size:11px;color:#16a34a">These make the most profit per sale but not enough customers know about them</div>'+
+              '</div>'+
+            '</div>'+
+            '<div>'+heroes.slice(0,5).map(function(p){return prodRow(p,'#16a34a',true);}).join('')+'</div>'+
+          '</div>':'') +
+
+        /* stars */
+        (stars.length?
+          '<div style="background:#f0fdf4;border-radius:10px;padding:14px;margin-bottom:12px">'+
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'+
+              '<span style="font-size:16px">⭐</span>'+
+              '<div>'+
+                '<div style="font-size:13px;font-weight:700;color:#166534">Star products — protect these</div>'+
+                '<div style="font-size:11px;color:#16a34a">High margin AND already popular — your best products, keep them consistent</div>'+
+              '</div>'+
+            '</div>'+
+            '<div>'+stars.slice(0,4).map(function(p){return prodRow(p,'#16a34a',true);}).join('')+'</div>'+
+          '</div>':'') +
+
+        /* workhorses */
+        (workhorses.length?
+          '<div style="background:#fffbeb;border-radius:10px;padding:14px;margin-bottom:12px">'+
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'+
+              '<span style="font-size:16px">⚙️</span>'+
+              '<div>'+
+                '<div style="font-size:13px;font-weight:700;color:#92400e">Volume drivers — keep but don\'t rely on</div>'+
+                '<div style="font-size:11px;color:#d97706">Low margin but popular — good for customer retention, bad for profit. Use to anchor orders, not to build margin.</div>'+
+              '</div>'+
+            '</div>'+
+            '<div>'+workhorses.slice(0,4).map(function(p){return prodRow(p,'#d97706',true);}).join('')+'</div>'+
+          '</div>':'') +
+
+        /* reconsider */
+        (reconsider.length?
+          '<div style="background:#fff5f5;border-radius:10px;padding:14px">'+
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'+
+              '<span style="font-size:16px">⚠️</span>'+
+              '<div>'+
+                '<div style="font-size:13px;font-weight:700;color:#991b1b">Reconsider — low margin AND low demand</div>'+
+                '<div style="font-size:11px;color:#dc2626">These take effort to source but generate little profit and few customers want them</div>'+
+              '</div>'+
+            '</div>'+
+            '<div>'+reconsider.slice(0,4).map(function(p){return prodRow(p,'#dc2626',false);}).join('')+'</div>'+
+          '</div>':'') +
+
+      '</div>';
+    })()+
+
     '<div class="card" style="border:2px solid #e0e7ff">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">'+
         '<div><div style="font-size:15px;font-weight:700;color:#1e3a5f">🎯 Next Run Planner</div>'+
